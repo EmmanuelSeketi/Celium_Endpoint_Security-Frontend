@@ -39,7 +39,7 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        'bg-card border border-border rounded-md p-4 flex flex-col gap-2',
+        'bg-card border border-border rounded-md p-4 flex flex-col gap-2 h-full',
         className
       )}
     >
@@ -79,7 +79,9 @@ export function KpiCard({
         <p className="text-[12px] text-muted-foreground leading-snug">{description}</p>
       )}
 
-      {children}
+      <div className="mt-auto">
+        {children}
+      </div>
     </div>
   )
 }

@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { ArrowRight, Network, ShieldAlert, RefreshCw, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import {
   devices,
   alerts,
@@ -16,8 +17,32 @@ import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
 import { StatusDot, CategoryBadge, StatusBadge } from '@/components/ui/status-badge'
-import { ComplianceBar, StackedFleetBar, ComplianceDonut } from '@/components/ui/compliance-bar'
+import { ComplianceBar, StackedFleetBar, ComplianceDonut, ScoreRing } from '@/components/ui/compliance-bar'
 import { ComplianceLineChart, OSComplianceBarChart } from '@/components/ui/charts'
+
+function OSIcon({ os, className }: { os: string; className?: string }) {
+  if (os === 'Windows') {
+    return (
+      <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none" stroke="#0078D4" strokeWidth="1.5">
+        <rect x="3" y="3" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+        <rect x="13" y="3" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+        <rect x="3" y="13" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+        <rect x="13" y="13" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+      </svg>
+    )
+  }
+  if (os === 'Mac') {
+    return (
+      <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none">
+        <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 16.56 2.93 11.3 4.7 7.72C5.57 5.94 7.36 4.86 9.28 4.84C10.56 4.81 11.78 5.72 12.58 5.72C13.38 5.72 14.88 4.62 16.4 4.81C16.96 4.82 18.92 5.08 20.13 6.82C19.93 6.9 18.2 8.15 18.21 10.72C18.22 13.76 20.78 14.83 20.8 14.84C20.78 14.94 20.34 16.54 19.33 18.23" fill="#A3AAAE" stroke="#A3AAAE"/>
+      </svg>
+    )
+  }
+  if (os === 'Linux') {
+    return <img src="/Linux.svg" width="16" height="16" className={className} alt="Linux" />
+  }
+  return null
+}
 
 export function OverviewPage() {
   const stats = getFleetStats()
@@ -408,40 +433,63 @@ export function OverviewPage() {
         <table className="w-full text-[13px]">
           <thead>
             <tr className="border-b border-border">
-              {['Status', 'Device', 'IP', 'User', 'Score', 'Checks', 'Last Seen'].map(h => (
-                <th key={h} className="px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  {h}
+              {[
+                { label: 'Status', align: 'left' },
+                { label: 'Device', align: 'left' },
+                { label: 'OS', align: 'left' },
+                { label: 'IP', align: 'left' },
+                { label: 'User', align: 'left' },
+                { label: 'Dept', align: 'left' },
+                { label: 'Score', align: 'right' },
+                { label: 'Checks', align: 'right' },
+                { label: 'Last Seen', align: 'left' },
+              ].map(h => (
+                <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', h.align === 'right' ? 'text-right' : 'text-left')}>
+                  {h.label}
                 </th>
               ))}
             </tr>
           </thead>
           <tbody>
             {devices.slice(0, 10).map(d => (
-              <tr key={d.id} className="border-b border-border h-10 hover:bg-surface-hover transition-colors">
-                <td className="px-3"><StatusDot status={d.status} /></td>
+              <tr
+                key={d.id}
+                className="border-b border-border h-10 hover:bg-surface-hover transition-colors"
+              >
+                <td className="px-3"><StatusBadge status={d.status} size="sm" /></td>
                 <td className="px-3">
                   <span className="font-mono text-[12px] text-foreground">{d.name}</span>
-                  <span className="ml-2 text-[11px] text-muted-foreground">{d.os}</span>
+                </td>
+                <td className="px-3">
+                  <div className="flex items-center gap-2">
+                    <OSIcon os={d.os} />
+                    <span className="text-[12px] text-muted-foreground">{d.os}</span>
+                  </div>
                 </td>
                 <td className="px-3"><span className="font-mono text-[12px] text-muted-foreground">{d.ip}</span></td>
                 <td className="px-3 text-muted-foreground">{d.username}</td>
+                <td className="px-3 text-muted-foreground">{d.department}</td>
                 <td className="px-3">
-                  <div className="flex items-center gap-2">
-                    <ComplianceBar score={d.complianceScore} height={4} className="w-16" />
-                    <span className="font-mono text-[12px]" style={{ color: getComplianceScoreColor(d.complianceScore) }}>{d.complianceScore}%</span>
+                  <div className="flex items-center justify-end">
+                    <ScoreRing score={d.complianceScore} size={26} strokeWidth={3} />
                   </div>
                 </td>
-                <td className="px-3 text-right font-mono text-[12px]">
-                  <span className="text-[#F04438]">{d.failedChecks}</span>
-                  <span className="text-muted-foreground"> / {d.passedChecks + d.failedChecks}</span>
+                <td className="px-3 text-right">
+                  <span className="font-mono text-[12px] text-status-critical">{d.failedChecks}</span>
+                  <span className="font-mono text-[12px] text-muted-foreground"> / {d.failedChecks + d.passedChecks}</span>
                 </td>
-                <td className="px-3 text-muted-foreground text-[12px]">
+                <td className="px-3 text-muted-foreground text-[12px] whitespace-nowrap">
                   {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
+        <div className="px-3 py-2 border-t border-border flex items-center justify-between">
+          <p className="text-[12px] text-muted-foreground">
+            Showing 1–{Math.min(devices.length, 10)} of {devices.length} devices
+          </p>
+        </div>
       </SectionCard>
     </div>
   )
