@@ -1,0 +1,420 @@
+'use client'
+
+import { useState, useMemo } from 'react'
+import { formatDistanceToNow, format } from 'date-fns'
+import { Search, X, ChevronDown, Plus, Laptop, ShieldCheck } from 'lucide-react'
+import { devices as allDevices } from '@/lib/mock-data'
+import { PageHeader } from '@/components/ui/page-header'
+import { SectionCard } from '@/components/ui/section-card'
+import { StatusDot, StatusBadge } from '@/components/ui/status-badge'
+import { ComplianceBar } from '@/components/ui/compliance-bar'
+import { getComplianceScoreColor, getDefinitionAgeColor } from '@/lib/theme'
+import type { Device, OS, DeviceStatus } from '@/lib/types'
+import { cn } from '@/lib/utils'
+
+const OS_OPTIONS: OS[] = ['Windows', 'Mac', 'Linux']
+const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
+const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
+
+interface DeviceDrawerProps {
+  device: Device
+  onClose: () => void
+}
+
+function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
+  const [tab, setTab] = useState<'overview' | 'malware' | 'patches' | 'history'>('overview')
+  const defColor = getDefinitionAgeColor(device.malwareStatus.definitionAge)
+
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative bg-card border-l border-border w-[480px] h-full overflow-y-auto z-10 flex flex-col">
+        {/* Header */}
+        <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-card">
+          <div>
+            <div className="flex items-center gap-2 mb-1">
+              <Laptop size={15} strokeWidth={1.5} className="text-muted-foreground" />
+              <span className="font-mono text-[15px] font-semibold text-foreground">{device.name}</span>
+              <StatusBadge status={device.status} size="sm" />
+            </div>
+            <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
+              <span>{device.osVersion}</span>
+              <span>{device.ip}</span>
+            </div>
+          </div>
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground transition-colors mt-0.5">
+            <X size={14} strokeWidth={2} />
+          </button>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-border px-5 sticky top-[73px] bg-card">
+          {([
+            ['overview', 'Dashboard'],
+            ...(device.domainJoined ? [['ad', 'Active Directory']] : []),
+            ['malware', 'Malware'],
+            ['patches', 'Patches'],
+            ['history', 'History'],
+          ] as [string, string][]).map(([id, label]) => (
+            <button
+              key={id}
+              onClick={() => setTab(id as typeof tab)}
+              className={cn(
+                'px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors -mb-px',
+                tab === id
+                  ? 'border-brand text-brand'
+                  : 'border-transparent text-muted-foreground hover:text-foreground'
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-5 flex-1">
+          {tab === 'overview' && (
+            <div className="space-y-4">
+              {/* Score Ring */}
+              <div className="flex items-center gap-4 bg-surface border border-border rounded-md p-4">
+                <div
+                  className="w-16 h-16 rounded-full flex items-center justify-center font-mono text-[20px] font-semibold border-4"
+                  style={{
+                    borderColor: getComplianceScoreColor(device.complianceScore),
+                    color: getComplianceScoreColor(device.complianceScore),
+                  }}
+                >
+                  {device.complianceScore}
+                </div>
+                <div>
+                  <p className="text-[13px] font-semibold text-foreground">Compliance Score</p>
+                  <p className="text-[12px] text-muted-foreground mt-0.5">
+                    {device.failedChecks} failed · {device.passedChecks} passed
+                  </p>
+                </div>
+              </div>
+
+              {/* Key facts */}
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: 'Department', value: device.department },
+                  { label: 'Username', value: device.username },
+                  { label: 'Domain Joined', value: device.domainJoined ? 'Yes' : 'No' },
+                  { label: 'Last Scanned', value: formatDistanceToNow(new Date(device.lastScanned), { addSuffix: true }) },
+                  { label: 'MAC Address', value: device.mac, mono: true },
+                ].map(item => (
+                  <div key={item.label} className="bg-surface border border-border rounded-md p-3">
+                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{item.label}</p>
+                    <p className={cn('text-[13px] text-foreground mt-1', item.mono && 'font-mono')}>{item.value}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === 'malware' && (
+            <div className="space-y-3">
+              <div className="bg-surface border border-border rounded-md divide-y divide-border">
+                {[
+                  { label: 'Engine Version', value: device.malwareStatus.engineVersion, mono: true },
+                  {
+                    label: 'Definition Age',
+                    value: `${device.malwareStatus.definitionAge} day${device.malwareStatus.definitionAge !== 1 ? 's' : ''}`,
+                    color: defColor,
+                  },
+                  {
+                    label: 'Real-time Protection',
+                    value: device.malwareStatus.realtimeProtection ? 'Enabled' : 'Disabled',
+                    color: device.malwareStatus.realtimeProtection ? '#008080' : '#F04438',
+                  },
+                  {
+                    label: 'Tamper Protection',
+                    value: device.malwareStatus.tamperProtection ? 'Enabled' : 'Disabled',
+                    color: device.malwareStatus.tamperProtection ? '#008080' : '#F04438',
+                  },
+                  {
+                    label: 'Last Scan Result',
+                    value: device.malwareStatus.lastScanResult.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
+                    color: device.malwareStatus.lastScanResult === 'clean' ? '#008080' : '#F04438',
+                  },
+                  { label: 'Quarantine Count', value: String(device.malwareStatus.quarantineCount), mono: true },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
+                    <span className="text-[12px] text-muted-foreground">{item.label}</span>
+                    <span className={cn('text-[12px] text-foreground', item.mono && 'font-mono')} style={item.color ? { color: item.color } : undefined}>
+                      {item.value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === 'patches' && (
+            <div className="space-y-3">
+              <div className="bg-surface border border-border rounded-md divide-y divide-border">
+                {[
+                  { label: 'Missing Critical', value: device.patchStatus.missingCritical, color: device.patchStatus.missingCritical > 0 ? '#F04438' : '#008080' },
+                  { label: 'Missing Total', value: device.patchStatus.missingTotal },
+                  { label: 'Pending Reboot', value: device.patchStatus.pendingReboot ? 'Yes' : 'No', color: device.patchStatus.pendingReboot ? '#F79009' : undefined },
+                  { label: 'OS End-of-Life', value: device.patchStatus.osEol ? `Yes — EOL: ${device.patchStatus.eolDate ?? '—'}` : 'No', color: device.patchStatus.osEol ? '#F04438' : '#008080' },
+                  { label: 'Last Update Check', value: format(new Date(device.patchStatus.lastUpdateCheck), 'MMM d, yyyy HH:mm') },
+                ].map(item => (
+                  <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
+                    <span className="text-[12px] text-muted-foreground">{item.label}</span>
+                    <span className="text-[12px] font-mono" style={item.color ? { color: item.color } : { color: '#E6E8EB' }}>
+                      {String(item.value)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {tab === 'history' && (
+            <div className="space-y-2">
+              <p className="text-[13px] text-muted-foreground py-8 text-center">
+                Scan history shows the last 30 scan events for this device.
+              </p>
+              <div className="bg-surface border border-border rounded-md divide-y divide-border">
+                {[...Array(5)].map((_, i) => {
+                  const score = device.complianceScore - i * 2
+                  return (
+                    <div key={i} className="flex items-center justify-between px-3 py-2.5">
+                      <span className="text-[12px] text-muted-foreground font-mono">
+                        {format(new Date(Date.now() - i * 3 * 3600 * 1000), 'MMM d, HH:mm')}
+                      </span>
+                      <span className="text-[12px] font-mono" style={{ color: getComplianceScoreColor(score) }}>
+                        {Math.max(0, score)}%
+                      </span>
+                      <StatusBadge status={score >= 85 ? 'compliant' : score >= 65 ? 'warning' : 'critical'} size="sm" />
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function DevicesPage() {
+  const [search, setSearch] = useState('')
+  const [osFilter, setOsFilter] = useState<OS | ''>('')
+  const [statusFilter, setStatusFilter] = useState<DeviceStatus | ''>('')
+  const [deptFilter, setDeptFilter] = useState('')
+  const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
+  const [osOpen, setOsOpen] = useState(false)
+  const [statusOpen, setStatusOpen] = useState(false)
+  const [deptOpen, setDeptOpen] = useState(false)
+
+  const filtered = useMemo(() => {
+    return allDevices.filter(d => {
+      if (search) {
+        const q = search.toLowerCase()
+        if (!d.name.toLowerCase().includes(q) && !d.ip.includes(q) && !d.username.toLowerCase().includes(q)) return false
+      }
+      if (osFilter && d.os !== osFilter) return false
+      if (statusFilter && d.status !== statusFilter) return false
+      if (deptFilter && d.department !== deptFilter) return false
+      return true
+    })
+  }, [search, osFilter, statusFilter, deptFilter])
+
+  return (
+    <>
+      <div className="space-y-4">
+        <PageHeader
+          title="Devices"
+          description={`${allDevices.length} endpoints in the fleet.`}
+          action={
+            <button className="flex items-center gap-2 px-3 py-1.5 bg-brand text-white rounded-md text-[13px] font-medium hover:bg-brand/90 transition-colors">
+              <Plus size={14} strokeWidth={2} />
+              Add Device
+            </button>
+          }
+        />
+
+        {/* Filter bar */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="relative flex-1 min-w-48 max-w-72">
+            <Search size={13} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              placeholder="Search by name, IP, user..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full h-8 bg-surface border border-border rounded-md pl-8 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
+            />
+          </div>
+
+          {/* OS filter */}
+          <div className="relative">
+            <button
+              onClick={() => { setOsOpen(!osOpen); setStatusOpen(false); setDeptOpen(false) }}
+              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            >
+              OS {osFilter ? <span className="text-brand font-medium">· {osFilter}</span> : ''}
+              <ChevronDown size={12} strokeWidth={2} />
+            </button>
+            {osOpen && (
+              <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
+                <button onClick={() => { setOsFilter(''); setOsOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">
+                  All OS
+                </button>
+                {OS_OPTIONS.map(o => (
+                  <button key={o} onClick={() => { setOsFilter(o); setOsOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-hover transition-colors', osFilter === o ? 'text-brand font-medium' : 'text-muted-foreground hover:text-foreground')}>
+                    {o}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Status filter */}
+          <div className="relative">
+            <button
+              onClick={() => { setStatusOpen(!statusOpen); setOsOpen(false); setDeptOpen(false) }}
+              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Status {statusFilter ? <span className="text-brand font-medium">· {statusFilter}</span> : ''}
+              <ChevronDown size={12} strokeWidth={2} />
+            </button>
+            {statusOpen && (
+              <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
+                <button onClick={() => { setStatusFilter(''); setStatusOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">
+                  All Statuses
+                </button>
+                {STATUS_OPTIONS.map(s => (
+                  <button key={s} onClick={() => { setStatusFilter(s); setStatusOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-hover transition-colors capitalize', statusFilter === s ? 'text-brand font-medium' : 'text-muted-foreground hover:text-foreground')}>
+                    {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Dept filter */}
+          <div className="relative">
+            <button
+              onClick={() => { setDeptOpen(!deptOpen); setOsOpen(false); setStatusOpen(false) }}
+              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Dept {deptFilter ? <span className="text-brand font-medium">· {deptFilter}</span> : ''}
+              <ChevronDown size={12} strokeWidth={2} />
+            </button>
+            {deptOpen && (
+              <div className="absolute top-full left-0 mt-1 w-44 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
+                <button onClick={() => { setDeptFilter(''); setDeptOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">
+                  All Departments
+                </button>
+                {DEPT_OPTIONS.map(dept => (
+                  <button key={dept} onClick={() => { setDeptFilter(dept); setDeptOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-hover transition-colors', deptFilter === dept ? 'text-brand font-medium' : 'text-muted-foreground hover:text-foreground')}>
+                    {dept}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Active filter chips */}
+          {[osFilter, statusFilter, deptFilter].filter(Boolean).map(f => (
+            <span key={f} className="flex items-center gap-1 px-2 py-0.5 bg-brand/15 border border-brand/30 rounded text-[12px] text-brand">
+              {f}
+              <button onClick={() => {
+                if (f === osFilter) setOsFilter('')
+                if (f === statusFilter) setStatusFilter('')
+                if (f === deptFilter) setDeptFilter('')
+              }}>
+                <X size={11} strokeWidth={2.5} />
+              </button>
+            </span>
+          ))}
+        </div>
+
+        <SectionCard noPadding>
+          <table className="w-full text-[13px]">
+            <thead>
+              <tr className="border-b border-border">
+                {[
+                  { label: 'Status', align: 'left' },
+                  { label: 'Device', align: 'left' },
+                  { label: 'IP', align: 'left' },
+                  { label: 'User', align: 'left' },
+                  { label: 'Dept', align: 'left' },
+                  { label: 'Score', align: 'right' },
+                  { label: 'Checks', align: 'right' },
+                  { label: 'Last Seen', align: 'left' },
+                ].map(h => (
+                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', h.align === 'right' ? 'text-right' : 'text-left')}>
+                    {h.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="py-12 text-center">
+                    <div className="flex flex-col items-center gap-2">
+                      <Laptop size={20} strokeWidth={1.5} className="text-muted-foreground" />
+                      <p className="text-[13px] text-muted-foreground">No devices match the current filters.</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : (
+                filtered.map(d => (
+                  <tr
+                    key={d.id}
+                    className="border-b border-border h-10 hover:bg-surface-hover cursor-pointer transition-colors"
+                    onClick={() => setSelectedDevice(d)}
+                  >
+                    <td className="px-3"><StatusDot status={d.status} /></td>
+                    <td className="px-3">
+                      <div className="flex items-center gap-1.5">
+                        <ShieldCheck size={12} strokeWidth={1.5} className="text-muted-foreground shrink-0" />
+                        <span className="font-mono text-[12px] text-foreground">{d.name}</span>
+                        <span className="text-[11px] text-muted-foreground hidden xl:inline">{d.os}</span>
+                      </div>
+                    </td>
+                    <td className="px-3"><span className="font-mono text-[12px] text-muted-foreground">{d.ip}</span></td>
+                    <td className="px-3 text-muted-foreground">{d.username}</td>
+                    <td className="px-3 text-muted-foreground">{d.department}</td>
+                    <td className="px-3">
+                      <div className="flex items-center justify-end gap-2">
+                        <ComplianceBar score={d.complianceScore} height={3} className="w-16" />
+                        <span className="font-mono text-[12px] w-7 text-right" style={{ color: getComplianceScoreColor(d.complianceScore) }}>
+                          {d.complianceScore}%
+                        </span>
+                      </div>
+                    </td>
+                    <td className="px-3 text-right">
+                      <span className="font-mono text-[12px] text-status-critical">{d.failedChecks}</span>
+                      <span className="font-mono text-[12px] text-muted-foreground"> / {d.failedChecks + d.passedChecks}</span>
+                    </td>
+                    <td className="px-3 text-muted-foreground text-[12px] whitespace-nowrap">
+                      {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          <div className="px-3 py-2 border-t border-border flex items-center justify-between">
+            <p className="text-[12px] text-muted-foreground">
+              Showing 1–{Math.min(filtered.length, 20)} of {filtered.length} devices
+            </p>
+          </div>
+        </SectionCard>
+      </div>
+
+      {selectedDevice && (
+        <DeviceDrawer device={selectedDevice} onClose={() => setSelectedDevice(null)} />
+      )}
+      {(osOpen || statusOpen || deptOpen) && (
+        <div className="fixed inset-0 z-10" onClick={() => { setOsOpen(false); setStatusOpen(false); setDeptOpen(false) }} />
+      )}
+    </>
+  )
+}
