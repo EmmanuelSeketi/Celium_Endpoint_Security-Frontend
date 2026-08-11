@@ -146,7 +146,7 @@ export function ActiveDirectoryPage() {
                 <Legend
                   formatter={(v) => <span style={{ color: '#9AA3AF', fontSize: 11 }}>{v}</span>}
                 />
-                <Bar dataKey="successful" name="Successful" fill="#5B7FFF" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="successful" name="Successful" fill="#008080" radius={[2, 2, 0, 0]} />
                 <Bar dataKey="failed" name="Failed" fill="#F04438" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

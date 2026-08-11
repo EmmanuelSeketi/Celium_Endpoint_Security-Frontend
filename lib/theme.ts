@@ -28,7 +28,7 @@ export const CATEGORY_LABELS = {
   other: 'Other',
 } as const
 
-export const BRAND = '#5B7FFF'
+export const BRAND = '#008080'
 export const CHART_GRID = 'var(--border)'
 
 export type StatusKey = keyof typeof STATUS_COLORS

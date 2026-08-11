@@ -2,12 +2,12 @@
 
 import { useState, useMemo } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Search, X, ChevronDown, Plus, Laptop, ShieldCheck } from 'lucide-react'
+import { Search, X, ChevronDown, Plus, Laptop } from 'lucide-react'
 import { devices as allDevices } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { StatusDot, StatusBadge } from '@/components/ui/status-badge'
-import { ComplianceBar } from '@/components/ui/compliance-bar'
+import { ComplianceBar, ScoreRing } from '@/components/ui/compliance-bar'
 import { getComplianceScoreColor, getDefinitionAgeColor } from '@/lib/theme'
 import type { Device, OS, DeviceStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -15,6 +15,41 @@ import { cn } from '@/lib/utils'
 const OS_OPTIONS: OS[] = ['Windows', 'Mac', 'Linux']
 const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
 const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
+
+function OSIcon({ os, className }: { os: OS; className?: string }) {
+  if (os === 'Windows') {
+    return (
+      <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none" stroke="#0078D4" strokeWidth="1.5">
+        <rect x="3" y="3" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+        <rect x="13" y="3" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+        <rect x="3" y="13" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+        <rect x="13" y="13" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+      </svg>
+    )
+  }
+  if (os === 'Mac') {
+    return (
+      <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none">
+        <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 16.56 2.93 11.3 4.7 7.72C5.57 5.94 7.36 4.86 9.28 4.84C10.56 4.81 11.78 5.72 12.58 5.72C13.38 5.72 14.88 4.62 16.4 4.81C16.96 4.82 18.92 5.08 20.13 6.82C19.93 6.9 18.2 8.15 18.21 10.72C18.22 13.76 20.78 14.83 20.8 14.84C20.78 14.94 20.34 16.54 19.33 18.23" fill="#A3AAAE" stroke="#A3AAAE"/>
+      </svg>
+    )
+  }
+  if (os === 'Linux') {
+    return <img src="/Linux.svg" width="16" height="16" className={className} alt="Linux" />
+  }
+  return (
+    <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none">
+      <path d="M12 2C10.5 2 9 3 8.5 4.5C8 3 6.5 2 5 2C3.5 2 2.5 3.5 2.5 5.5C2.5 7 3 8 3.5 8.5C3 8.8 2 9.5 2 11C2 12.5 2.8 13.5 4 14C3 14.5 2 15.5 2 17C2 19 3.5 21 5 21C6.5 21 7 19.5 8.5 19.5C10 19.5 10.5 21 12 21C13.5 21 14 19.5 15.5 19.5C17 19.5 17.5 21 19 21C20.5 21 22 19 22 17C22 15.5 21 14.5 20 14C21.2 13.5 22 12.5 22 11C22 9.5 21 8.8 20.5 8.5C21 8 21.5 7 21.5 5.5C21.5 3.5 20.5 2 19 2C17.5 2 16 3 15.5 4.5C15 3 13.5 2 12 2Z" fill="#FFCC00" stroke="#000" strokeWidth="0.5"/>
+      <ellipse cx="8" cy="10" rx="1.5" ry="2" fill="#fff"/>
+      <ellipse cx="16" cy="10" rx="1.5" ry="2" fill="#fff"/>
+      <circle cx="8" cy="10.5" r="0.8" fill="#000"/>
+      <circle cx="16" cy="10.5" r="0.8" fill="#000"/>
+      <path d="M10 13C10 13 11 14 12 14C13 14 14 13 14 13" stroke="#F7941D" strokeWidth="1" strokeLinecap="round"/>
+      <path d="M8 5C8 5 9 4 10 5" stroke="#FF8C00" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
+      <path d="M16 5C16 5 15 4 14 5" stroke="#FF8C00" strokeWidth="1.2" strokeLinecap="round" fill="none"/>
+    </svg>
+  )
+}
 
 interface DeviceDrawerProps {
   device: Device
@@ -340,6 +375,7 @@ export function DevicesPage() {
                 {[
                   { label: 'Status', align: 'left' },
                   { label: 'Device', align: 'left' },
+                  { label: 'OS', align: 'left' },
                   { label: 'IP', align: 'left' },
                   { label: 'User', align: 'left' },
                   { label: 'Dept', align: 'left' },
@@ -356,7 +392,7 @@ export function DevicesPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center">
+                  <td colSpan={9} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Laptop size={20} strokeWidth={1.5} className="text-muted-foreground" />
                       <p className="text-[13px] text-muted-foreground">No devices match the current filters.</p>
@@ -370,23 +406,22 @@ export function DevicesPage() {
                     className="border-b border-border h-10 hover:bg-surface-hover cursor-pointer transition-colors"
                     onClick={() => setSelectedDevice(d)}
                   >
-                    <td className="px-3"><StatusDot status={d.status} /></td>
+                    <td className="px-3"><StatusBadge status={d.status} size="sm" /></td>
                     <td className="px-3">
-                      <div className="flex items-center gap-1.5">
-                        <ShieldCheck size={12} strokeWidth={1.5} className="text-muted-foreground shrink-0" />
-                        <span className="font-mono text-[12px] text-foreground">{d.name}</span>
-                        <span className="text-[11px] text-muted-foreground hidden xl:inline">{d.os}</span>
+                      <span className="font-mono text-[12px] text-foreground">{d.name}</span>
+                    </td>
+                    <td className="px-3">
+                      <div className="flex items-center gap-2">
+                        <OSIcon os={d.os} />
+                        <span className="text-[12px] text-muted-foreground">{d.os}</span>
                       </div>
                     </td>
                     <td className="px-3"><span className="font-mono text-[12px] text-muted-foreground">{d.ip}</span></td>
                     <td className="px-3 text-muted-foreground">{d.username}</td>
                     <td className="px-3 text-muted-foreground">{d.department}</td>
                     <td className="px-3">
-                      <div className="flex items-center justify-end gap-2">
-                        <ComplianceBar score={d.complianceScore} height={3} className="w-16" />
-                        <span className="font-mono text-[12px] w-7 text-right" style={{ color: getComplianceScoreColor(d.complianceScore) }}>
-                          {d.complianceScore}%
-                        </span>
+                      <div className="flex items-center justify-end">
+                        <ScoreRing score={d.complianceScore} size={26} strokeWidth={3} />
                       </div>
                     </td>
                     <td className="px-3 text-right">

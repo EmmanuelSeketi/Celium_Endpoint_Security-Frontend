@@ -166,3 +166,51 @@ export function ComplianceDonut({ compliant, warning, critical, total, size = 14
     </div>
   )
 }
+
+interface ScoreRingProps {
+  score: number
+  size?: number
+  strokeWidth?: number
+  showLabel?: boolean
+  labelClassName?: string
+}
+
+export function ScoreRing({ score, size = 28, strokeWidth = 3, showLabel = true, labelClassName }: ScoreRingProps) {
+  const color = getComplianceScoreColor(score)
+  const radius = (size - strokeWidth) / 2
+  const circumference = 2 * Math.PI * radius
+  const progress = (score / 100) * circumference
+  const center = size / 2
+
+  return (
+    <div className="relative inline-flex items-center justify-center" style={{ width: size, height: size }}>
+      <svg width={size} height={size} className="transform -rotate-90">
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-surface-hover"
+        />
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeDasharray={`${progress} ${circumference}`}
+          strokeLinecap="round"
+          className="transition-all"
+        />
+      </svg>
+      {showLabel && (
+        <span className={cn('absolute inset-0 flex items-center justify-center font-mono text-[10px] font-medium tabular-nums', labelClassName)} style={{ color }}>
+          {score}
+        </span>
+      )}
+    </div>
+  )
+}
