@@ -4,7 +4,7 @@ import { STATUS_COLORS } from '@/lib/theme'
 
 interface KpiCardProps {
   label: string
-  value: string | number
+  value?: string | number
   description?: string
   delta?: number
   deltaLabel?: string
@@ -55,25 +55,29 @@ export function KpiCard({
         )}
       </div>
 
-      <div className="flex items-end gap-3">
-        <span
-          className="text-[30px] font-semibold leading-none tabular-nums"
-          style={{ fontVariantNumeric: 'tabular-nums' }}
-        >
-          {value}
-        </span>
-        {delta !== undefined && (
-          <div
-            className="flex items-center gap-0.5 text-[12px] font-medium pb-0.5"
-            style={{ color: trendColor }}
-          >
-            <TrendIcon size={13} strokeWidth={2} />
-            <span>
-              {delta > 0 ? '+' : ''}{delta}{deltaLabel ?? ''}
+      {(value !== undefined || delta !== undefined) && (
+        <div className="flex items-end gap-3">
+          {value !== undefined && (
+            <span
+              className="text-[30px] font-semibold leading-none tabular-nums"
+              style={{ fontVariantNumeric: 'tabular-nums', color: accentColor }}
+            >
+              {value}
             </span>
-          </div>
-        )}
-      </div>
+          )}
+          {delta !== undefined && (
+            <div
+              className="flex items-center gap-0.5 text-[12px] font-medium pb-0.5"
+              style={{ color: trendColor }}
+            >
+              <TrendIcon size={13} strokeWidth={2} />
+              <span>
+                {delta > 0 ? '+' : ''}{delta}{deltaLabel ?? ''}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
 
       {description && (
         <p className="text-[12px] text-muted-foreground leading-snug">{description}</p>

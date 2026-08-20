@@ -2,19 +2,69 @@
 
 import { useState, useMemo } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Search, X, ChevronDown, Plus, Laptop } from 'lucide-react'
+import { Search, X, ChevronDown, ChevronRight, ArrowUpDown, Plus, Laptop } from 'lucide-react'
 import { devices as allDevices } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
-import { StatusDot, StatusBadge } from '@/components/ui/status-badge'
-import { ComplianceBar, ScoreRing } from '@/components/ui/compliance-bar'
-import { getComplianceScoreColor, getDefinitionAgeColor } from '@/lib/theme'
+import { ScoreBar, LastSeenIndicator } from '@/components/ui/compliance-bar'
+import { getDefinitionAgeColor, STATUS_COLORS } from '@/lib/theme'
 import type { Device, OS, DeviceStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
 const OS_OPTIONS: OS[] = ['Windows', 'Mac', 'Linux']
 const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
 const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
+
+// --- Shared severity system -------------------------------------------------
+// One palette, applied identically to Status, Score, Checks, and Last Seen,
+// so a Critical row reads as Critical everywhere instead of four different
+// ad hoc color decisions per row.
+type Severity = 'compliant' | 'warning' | 'critical'
+
+const SEVERITY: Record<Severity, { dot: string; label: string }> = {
+  compliant: { dot: STATUS_COLORS.compliant, label: 'Compliant' },
+  warning: { dot: STATUS_COLORS.warning, label: 'Warning' },
+  critical: { dot: STATUS_COLORS.critical, label: 'Critical' },
+}
+
+// Status text stays neutral in every state — only the dot carries color.
+// This is what keeps the indicator restrained instead of reading as a
+// bright, candy-colored badge.
+const SEVERITY_TEXT = '#334155'
+
+function scoreToSeverity(score: number): Severity {
+  if (score >= 85) return 'compliant'
+  if (score >= 65) return 'warning'
+  return 'critical'
+}
+
+function lastSeenSeverity(dateStr: string): Severity {
+  const hoursAgo = (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60)
+  if (hoursAgo < 24) return 'compliant'
+  if (hoursAgo <= 24 * 7) return 'warning'
+  return 'critical'
+}
+
+function StatusIndicator({ status, className }: { status: DeviceStatus; className?: string }) {
+  const s = SEVERITY[status as Severity]
+  return (
+    <span className={cn('inline-flex items-center gap-2', className)}>
+      <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
+      <span className="text-[12px] font-medium capitalize" style={{ color: SEVERITY_TEXT }}>
+        {status}
+      </span>
+    </span>
+  )
+}
+
+function SortableHeader({ label, align = 'left' }: { label: string; align?: 'left' | 'right' }) {
+  return (
+    <span className={cn('inline-flex items-center gap-1 group cursor-pointer', align === 'right' && 'flex-row-reverse')}>
+      {label}
+      <ArrowUpDown size={10} strokeWidth={2} className="text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
+    </span>
+  )
+}
 
 function OSIcon({ os, className }: { os: OS; className?: string }) {
   if (os === 'Windows') {
@@ -70,7 +120,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
             <div className="flex items-center gap-2 mb-1">
               <Laptop size={15} strokeWidth={1.5} className="text-muted-foreground" />
               <span className="font-mono text-[15px] font-semibold text-foreground">{device.name}</span>
-              <StatusBadge status={device.status} size="sm" />
+              <StatusIndicator status={device.status} />
             </div>
             <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
               <span>{device.osVersion}</span>
@@ -114,8 +164,8 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                 <div
                   className="w-16 h-16 rounded-full flex items-center justify-center font-mono text-[20px] font-semibold border-4"
                   style={{
-                    borderColor: getComplianceScoreColor(device.complianceScore),
-                    color: getComplianceScoreColor(device.complianceScore),
+                    borderColor: SEVERITY[device.status as Severity].dot,
+                    color: SEVERITY[device.status as Severity].dot,
                   }}
                 >
                   {device.complianceScore}
@@ -218,10 +268,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                       <span className="text-[12px] text-muted-foreground font-mono">
                         {format(new Date(Date.now() - i * 3 * 3600 * 1000), 'MMM d, HH:mm')}
                       </span>
-                      <span className="text-[12px] font-mono" style={{ color: getComplianceScoreColor(score) }}>
+                      <span className="text-[12px] font-mono" style={{ color: SEVERITY[scoreToSeverity(Math.max(0, score))].dot }}>
                         {Math.max(0, score)}%
                       </span>
-                      <StatusBadge status={score >= 85 ? 'compliant' : score >= 65 ? 'warning' : 'critical'} size="sm" />
+                      <StatusIndicator status={scoreToSeverity(Math.max(0, score))} />
                     </div>
                   )
                 })}
@@ -355,7 +405,7 @@ export function DevicesPage() {
 
           {/* Active filter chips */}
           {[osFilter, statusFilter, deptFilter].filter(Boolean).map(f => (
-            <span key={f} className="flex items-center gap-1 px-2 py-0.5 bg-brand/15 border border-brand/30 rounded text-[12px] text-brand">
+            <span key={f} className="flex items-center gap-1 px-2 py-0.5 bg-brand/15 border border-brand/30 rounded-full text-[12px] text-brand">
               {f}
               <button onClick={() => {
                 if (f === osFilter) setOsFilter('')
@@ -366,6 +416,15 @@ export function DevicesPage() {
               </button>
             </span>
           ))}
+
+          {[osFilter, statusFilter, deptFilter].some(Boolean) && (
+            <button
+              onClick={() => { setOsFilter(''); setStatusFilter(''); setDeptFilter('') }}
+              className="text-[12px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
+            >
+              Clear all
+            </button>
+          )}
         </div>
 
         <SectionCard noPadding>
@@ -373,26 +432,27 @@ export function DevicesPage() {
             <thead>
               <tr className="border-b border-border">
                 {[
-                  { label: 'Status', align: 'left' },
-                  { label: 'Device', align: 'left' },
-                  { label: 'OS', align: 'left' },
-                  { label: 'IP', align: 'left' },
-                  { label: 'User', align: 'left' },
-                  { label: 'Dept', align: 'left' },
-                  { label: 'Score', align: 'right' },
-                  { label: 'Checks', align: 'right' },
-                  { label: 'Last Seen', align: 'left' },
+                  { label: 'Status', align: 'left', sortable: true },
+                  { label: 'Device', align: 'left', sortable: false },
+                  { label: 'OS', align: 'left', sortable: false },
+                  { label: 'IP', align: 'left', sortable: false },
+                  { label: 'User', align: 'left', sortable: false },
+                  { label: 'Dept', align: 'left', sortable: false },
+                  { label: 'Score', align: 'right', sortable: true },
+                  { label: 'Checks', align: 'right', sortable: false },
+                  { label: 'Last Seen', align: 'left', sortable: true },
                 ].map(h => (
                   <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', h.align === 'right' ? 'text-right' : 'text-left')}>
-                    {h.label}
+                    {h.sortable ? <SortableHeader label={h.label} align={h.align as 'left' | 'right'} /> : h.label}
                   </th>
                 ))}
+                <th className="px-3 py-2 w-8" aria-hidden="true" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center">
+                  <td colSpan={10} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Laptop size={20} strokeWidth={1.5} className="text-muted-foreground" />
                       <p className="text-[13px] text-muted-foreground">No devices match the current filters.</p>
@@ -400,13 +460,16 @@ export function DevicesPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map(d => (
+                filtered.map((d, i) => (
                   <tr
                     key={d.id}
-                    className="border-b border-border h-10 hover:bg-surface-hover cursor-pointer transition-colors"
+                    className={cn(
+                      'group border-b border-border h-14 hover:bg-surface-hover cursor-pointer transition-colors',
+                      i % 2 === 1 && 'bg-black/[0.015]'
+                    )}
                     onClick={() => setSelectedDevice(d)}
                   >
-                    <td className="px-3"><StatusBadge status={d.status} size="sm" /></td>
+                    <td className="px-3"><StatusIndicator status={d.status} /></td>
                     <td className="px-3">
                       <span className="font-mono text-[12px] text-foreground">{d.name}</span>
                     </td>
@@ -420,16 +483,17 @@ export function DevicesPage() {
                     <td className="px-3 text-muted-foreground">{d.username}</td>
                     <td className="px-3 text-muted-foreground">{d.department}</td>
                     <td className="px-3">
-                      <div className="flex items-center justify-end">
-                        <ScoreRing score={d.complianceScore} size={26} strokeWidth={3} />
-                      </div>
+                      <ScoreBar score={d.complianceScore} severity={d.status as Severity} />
                     </td>
                     <td className="px-3 text-right">
-                      <span className="font-mono text-[12px] text-status-critical">{d.failedChecks}</span>
+                      <span className="font-mono text-[12px] font-semibold" style={{ color: SEVERITY[d.status as Severity].dot }}>{d.failedChecks}</span>
                       <span className="font-mono text-[12px] text-muted-foreground"> / {d.failedChecks + d.passedChecks}</span>
                     </td>
-                    <td className="px-3 text-muted-foreground text-[12px] whitespace-nowrap">
-                      {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
+                    <td className="px-3">
+                      <LastSeenIndicator date={d.lastSeen} />
+                    </td>
+                    <td className="px-3">
+                      <ChevronRight size={14} strokeWidth={2} className="text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
                     </td>
                   </tr>
                 ))

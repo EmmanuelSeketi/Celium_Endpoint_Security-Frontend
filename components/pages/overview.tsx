@@ -12,12 +12,12 @@ import {
   complianceChecks,
   getFleetStats,
 } from '@/lib/mock-data'
-import { CATEGORY_COLORS, getComplianceScoreColor } from '@/lib/theme'
+import { CATEGORY_COLORS, getComplianceScoreColor, getStatusColor } from '@/lib/theme'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
-import { StatusDot, CategoryBadge, StatusBadge } from '@/components/ui/status-badge'
-import { ComplianceBar, StackedFleetBar, ComplianceDonut, ScoreRing } from '@/components/ui/compliance-bar'
+import { StatusDot, CategoryBadge } from '@/components/ui/status-badge'
+import { ComplianceBar, StackedFleetBar, ComplianceDonut, ScoreBar, LastSeenIndicator } from '@/components/ui/compliance-bar'
 import { ComplianceLineChart, OSComplianceBarChart } from '@/components/ui/charts'
 
 function OSIcon({ os, className }: { os: string; className?: string }) {
@@ -110,28 +110,33 @@ export function OverviewPage() {
         <KpiCard
           label="Total Devices"
           value={stats.total}
-          description={`${stats.compliant} compliant, ${stats.warning} warning, ${stats.critical} critical`}
         >
           <div className="flex items-center gap-4">
-            <ComplianceDonut
-              compliant={stats.compliant}
-              warning={stats.warning}
-              critical={stats.critical}
-              total={stats.total}
-              size={100}
-            />
-            <div className="space-y-1.5 text-[12px]">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="w-2 h-2 rounded-full bg-[#008080]" />
-                Compliant <span className="font-mono text-foreground font-medium">{stats.compliant}</span>
+            <div className="shrink-0">
+              <ComplianceDonut
+                compliant={stats.compliant}
+                warning={stats.warning}
+                critical={stats.critical}
+                total={stats.total}
+                size={80}
+                showTotal={false}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5 text-[11px] min-w-0">
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#008080] shrink-0" />
+                <span className="truncate">Compliant</span>
+                <span className="font-mono text-foreground font-medium">{stats.compliant}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="w-2 h-2 rounded-full bg-[#F79009]" />
-                Warning <span className="font-mono text-foreground font-medium">{stats.warning}</span>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F79009] shrink-0" />
+                <span className="truncate">Warning</span>
+                <span className="font-mono text-foreground font-medium">{stats.warning}</span>
               </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <span className="w-2 h-2 rounded-full bg-[#F04438]" />
-                Critical <span className="font-mono text-foreground font-medium">{stats.critical}</span>
+              <div className="flex items-center gap-1.5 text-muted-foreground">
+                <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] shrink-0" />
+                <span className="truncate">Critical</span>
+                <span className="font-mono text-foreground font-medium">{stats.critical}</span>
               </div>
             </div>
           </div>
@@ -145,6 +150,7 @@ export function OverviewPage() {
           trend="down"
           trendGood={true}
           description={`${stats.warning} warning · ${stats.critical} critical`}
+          accentColor="#F79009"
         />
 
         <KpiCard
@@ -314,7 +320,10 @@ export function OverviewPage() {
                     )}
                     <span className="font-mono text-[12px]" style={{ color: getComplianceScoreColor(s.score) }}>{s.score}%</span>
                   </div>
-                  <StatusBadge status={s.status} size="sm" />
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: getStatusColor(s.status) }} />
+                    <span className="text-[12px] font-medium capitalize" style={{ color: '#334155' }}>{s.status}</span>
+                  </span>
                   <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
                     {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })}
                   </span>
@@ -326,41 +335,14 @@ export function OverviewPage() {
 
         {/* Right Column */}
         <div className="space-y-4">
-          {/* Compliance Distribution */}
-          <SectionCard title="Compliance Distribution">
-            <div className="flex items-center gap-6">
-              <ComplianceDonut
-                compliant={stats.compliant}
-                warning={stats.warning}
-                critical={stats.critical}
-                total={stats.total}
-                size={160}
-              />
-              <div className="space-y-3 text-[13px]">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#008080]" />
-                  Compliant <span className="font-mono text-foreground font-medium">{stats.compliant}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#F79009]" />
-                  Warning <span className="font-mono text-foreground font-medium">{stats.warning}</span>
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#F04438]" />
-                  Critical <span className="font-mono text-foreground font-medium">{stats.critical}</span>
-                </div>
-              </div>
-            </div>
-          </SectionCard>
-
           {/* Compliance by OS */}
           <SectionCard title="Compliance by OS">
-            <OSComplianceBarChart data={osByScore} height={130} />
+            <OSComplianceBarChart data={osByScore} height={180} />
           </SectionCard>
 
           {/* Top Failing Checks */}
           <SectionCard title="Top Failing Checks">
-            <div className="space-y-2">
+            <div className="space-y-2 pb-6">
               {topFailingChecks.length === 0 ? (
                 <p className="text-[13px] text-muted-foreground py-4 text-center">No failing checks found.</p>
               ) : (
@@ -388,7 +370,7 @@ export function OverviewPage() {
 
           {/* Risk Heatmap */}
           <SectionCard title="Risk Heatmap" description="Departments × check category">
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto pb-4">
               <table className="w-full text-[11px]">
                 <thead>
                   <tr>
@@ -456,7 +438,12 @@ export function OverviewPage() {
                 key={d.id}
                 className="border-b border-border h-10 hover:bg-surface-hover transition-colors"
               >
-                <td className="px-3"><StatusBadge status={d.status} size="sm" /></td>
+                <td className="px-3">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: getStatusColor(d.status) }} />
+                    <span className="text-[12px] font-medium capitalize" style={{ color: '#334155' }}>{d.status}</span>
+                  </span>
+                </td>
                 <td className="px-3">
                   <span className="font-mono text-[12px] text-foreground">{d.name}</span>
                 </td>
@@ -470,16 +457,14 @@ export function OverviewPage() {
                 <td className="px-3 text-muted-foreground">{d.username}</td>
                 <td className="px-3 text-muted-foreground">{d.department}</td>
                 <td className="px-3">
-                  <div className="flex items-center justify-end">
-                    <ScoreRing score={d.complianceScore} size={26} strokeWidth={3} />
-                  </div>
+                  <ScoreBar score={d.complianceScore} severity={d.status} />
                 </td>
                 <td className="px-3 text-right">
                   <span className="font-mono text-[12px] text-status-critical">{d.failedChecks}</span>
                   <span className="font-mono text-[12px] text-muted-foreground"> / {d.failedChecks + d.passedChecks}</span>
                 </td>
-                <td className="px-3 text-muted-foreground text-[12px] whitespace-nowrap">
-                  {formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}
+                <td className="px-3">
+                  <LastSeenIndicator date={d.lastSeen} />
                 </td>
               </tr>
             ))}

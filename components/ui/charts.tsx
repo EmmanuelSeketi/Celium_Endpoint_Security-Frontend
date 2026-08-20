@@ -63,7 +63,7 @@ export function ComplianceLineChart({ data, height = 160 }: ComplianceLineChartP
           </linearGradient>
         </defs>
         <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="date" tick={AXIS_STYLE} axisLine={false} tickLine={false} interval={2} />
+        <XAxis dataKey="date" tick={AXIS_STYLE} axisLine={false} tickLine={false} interval={3} />
         <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} domain={[40, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: CHART_GRID, strokeWidth: 1 }} />
         <Area
@@ -144,11 +144,54 @@ interface OSComplianceBarChartProps {
 
 export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChartProps) {
   const colors = [BRAND, CATEGORY_COLORS.malware_protection, CATEGORY_COLORS.os_updates]
+
+  function CustomAxisTick(props: any) {
+    const { x, y, payload } = props
+    const os = payload.value
+    const iconSize = 14
+    const gap = -4
+
+    let icon
+    if (os === 'Windows') {
+      icon = (
+        <svg viewBox="0 0 24 24" width={iconSize} height={iconSize}>
+          <rect x="3" y="3" width="8" height="8" rx="1" fill="#0078D4"/>
+          <rect x="13" y="3" width="8" height="8" rx="1" fill="#0078D4"/>
+          <rect x="3" y="13" width="8" height="8" rx="1" fill="#0078D4"/>
+          <rect x="13" y="13" width="8" height="8" rx="1" fill="#0078D4"/>
+        </svg>
+      )
+    } else if (os === 'macOS') {
+      icon = (
+        <svg viewBox="0 0 24 24" width={iconSize} height={iconSize}>
+          <path d="M18.71 19.5C17.88 20.74 17 21.95 15.66 21.97C14.32 22 13.89 21.18 12.37 21.18C10.84 21.18 10.37 21.95 9.1 22C7.79 22.05 6.8 20.68 5.96 19.47C4.25 16.56 2.93 11.3 4.7 7.72C5.57 5.94 7.36 4.86 9.28 4.84C10.56 4.81 11.78 5.72 12.58 5.72C13.38 5.72 14.88 4.62 16.4 4.81C16.96 4.82 18.92 5.08 20.13 6.82C19.93 6.9 18.2 8.15 18.21 10.72C18.22 13.76 20.78 14.83 20.8 14.84C20.78 14.94 20.34 16.54 19.33 18.23" fill="#A3AAAE"/>
+        </svg>
+      )
+    } else if (os === 'Linux') {
+      icon = (
+        <image href="/Linux.svg" x={0} y={0} width={iconSize} height={iconSize} />
+      )
+    }
+
+    if (!icon) return null
+
+    return (
+      <g transform={`translate(${x}, ${y})`}>
+        <g transform={`translate(${-(iconSize + gap + 18)}, -5)`}>
+          {icon}
+        </g>
+        <text x={iconSize + gap - 18} y={0} dy="0.71em" textAnchor="start" {...AXIS_STYLE}>
+          {payload.value}
+        </text>
+      </g>
+    )
+  }
+
   return (
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
         <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
-        <XAxis dataKey="os" tick={AXIS_STYLE} axisLine={false} tickLine={false} />
+        <XAxis dataKey="os" tick={<CustomAxisTick />} axisLine={false} tickLine={false} />
         <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} domain={[0, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-hover)', stroke: CHART_GRID, strokeWidth: 1 }} />
         <Bar dataKey="score" name="Avg Score %" radius={[4, 4, 0, 0]}>

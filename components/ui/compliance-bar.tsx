@@ -1,6 +1,7 @@
 import { cn } from '@/lib/utils'
-import { getComplianceScoreColor } from '@/lib/theme'
+import { getComplianceScoreColor, STATUS_COLORS } from '@/lib/theme'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { formatDistanceToNow } from 'date-fns'
 
 interface ComplianceBarProps {
   score: number
@@ -102,8 +103,9 @@ interface ComplianceDonutProps {
   compliant: number
   warning: number
   critical: number
-  total: number
+  total?: number
   size?: number
+  showTotal?: boolean
 }
 
 const DONUT_COLORS = {
@@ -126,7 +128,7 @@ function DonutTooltip({ active, payload }: { active?: boolean; payload?: { name?
   )
 }
 
-export function ComplianceDonut({ compliant, warning, critical, total, size = 140 }: ComplianceDonutProps) {
+export function ComplianceDonut({ compliant, warning, critical, total, size = 140, showTotal = true }: ComplianceDonutProps) {
   const data = [
     { name: 'Compliant', value: compliant, fill: DONUT_COLORS.compliant },
     { name: 'Warning', value: warning, fill: DONUT_COLORS.warning },
@@ -159,10 +161,12 @@ export function ComplianceDonut({ compliant, warning, critical, total, size = 14
           <Tooltip content={<DonutTooltip />} />
         </PieChart>
       </ResponsiveContainer>
-      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-        <span className="text-[22px] font-semibold tabular-nums text-foreground">{total}</span>
-        <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Total</span>
-      </div>
+      {showTotal && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="font-semibold tabular-nums text-foreground" style={{ fontSize: size * 0.22 }}>{total}</span>
+          <span className="uppercase tracking-wider text-muted-foreground font-medium" style={{ fontSize: size * 0.1 }}>Total</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -212,5 +216,45 @@ export function ScoreRing({ score, size = 28, strokeWidth = 3, showLabel = true,
         </span>
       )}
     </div>
+  )
+}
+
+interface ScoreBarProps {
+  score: number
+  severity?: 'compliant' | 'warning' | 'critical'
+  className?: string
+}
+
+export function ScoreBar({ score, severity, className }: ScoreBarProps) {
+  const color = severity ? STATUS_COLORS[severity] : getComplianceScoreColor(score)
+  return (
+    <div className={cn('flex items-center justify-end gap-2', className)}>
+      <span className="font-mono text-[12px] font-semibold w-6 text-right" style={{ color }}>
+        {score}
+      </span>
+      <div className="w-14 h-[5px] rounded-full bg-black/[0.06] overflow-hidden">
+        <div className="h-full rounded-full" style={{ width: `${Math.max(4, score)}%`, backgroundColor: color }} />
+      </div>
+    </div>
+  )
+}
+
+function lastSeenSeverity(dateStr: string): 'compliant' | 'warning' | 'critical' {
+  const hoursAgo = (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60)
+  if (hoursAgo < 24) return 'compliant'
+  if (hoursAgo <= 24 * 7) return 'warning'
+  return 'critical'
+}
+
+export function LastSeenIndicator({ date }: { date: string }) {
+  const severity = lastSeenSeverity(date)
+  const color = STATUS_COLORS[severity]
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: color }} />
+      <span className="text-[12px] font-medium" style={{ color }}>
+        {formatDistanceToNow(new Date(date), { addSuffix: true })}
+      </span>
+    </span>
   )
 }
