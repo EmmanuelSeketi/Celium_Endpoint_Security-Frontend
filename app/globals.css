@@ -6,7 +6,7 @@
 @custom-variant light (&:is(.light *));
 
 @theme inline {
-  --font-sans: 'Montserrat', 'Montserrat Fallback', system-ui, sans-serif;
+  --font-sans: 'Inter', BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, monospace;
 
   --color-background: var(--background);

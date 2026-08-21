@@ -8,7 +8,6 @@ import {
   devices,
   alerts,
   scanActivity,
-  complianceTrend,
   complianceChecks,
   getFleetStats,
 } from '@/lib/mock-data'
@@ -18,7 +17,7 @@ import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
 import { StatusDot, CategoryBadge } from '@/components/ui/status-badge'
 import { ComplianceBar, StackedFleetBar, ComplianceDonut, ScoreBar, LastSeenIndicator } from '@/components/ui/compliance-bar'
-import { ComplianceLineChart, OSComplianceBarChart } from '@/components/ui/charts'
+import { OSComplianceBarChart } from '@/components/ui/charts'
 
 function OSIcon({ os, className }: { os: string; className?: string }) {
   if (os === 'Windows') {
@@ -100,12 +99,11 @@ export function OverviewPage() {
           label="Avg Compliance Score"
           value={`${stats.avgScore}%`}
           delta={+3}
-          deltaLabel="% vs last period"
+          deltaLabel=" pts vs last period"
           trend="up"
           trendGood={true}
-        >
-          <ComplianceLineChart data={complianceTrend} height={48} />
-        </KpiCard>
+          description="Good · Improving"
+        />
 
         <KpiCard
           label="Total Devices"
@@ -146,21 +144,27 @@ export function OverviewPage() {
           label="Devices Needing Attention"
           value={stats.needingAttention}
           delta={-2}
-          deltaLabel=" vs last period"
+          deltaText="2 fewer vs last period"
           trend="down"
           trendGood={true}
-          description={`${stats.warning} warning · ${stats.critical} critical`}
+          description="Devices requiring remediation"
           accentColor="#F79009"
-        />
+        >
+          <div className="flex items-center gap-3 text-[12px] font-medium">
+            <span className="text-status-warning">{stats.warning} Warning</span>
+            <span className="text-muted-foreground">·</span>
+            <span className="text-status-critical">{stats.critical} Critical</span>
+          </div>
+        </KpiCard>
 
         <KpiCard
           label="Avg MTTR"
           value="4.2h"
           delta={-0.8}
-          deltaLabel="h vs last period"
+          deltaText="0.8h faster vs last period"
           trend="down"
           trendGood={true}
-          description="Mean time to remediate critical findings"
+          description="Improving · Lower is better"
         />
       </div>
 

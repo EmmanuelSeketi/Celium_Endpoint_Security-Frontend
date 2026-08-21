@@ -1,10 +1,11 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import { JetBrains_Mono, Montserrat } from 'next/font/google'
+import Script from 'next/script'
+import { Inter, JetBrains_Mono } from 'next/font/google'
 import { ThemeProvider } from '@/lib/theme-provider'
 import './globals.css'
 
-const montserrat = Montserrat({
+const inter = Inter({
   subsets: ['latin'],
   variable: '--font-sans',
   display: 'swap',
@@ -41,9 +42,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className={`dark bg-background ${montserrat.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`dark bg-background ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body className="antialiased font-sans">
-        <script
+        <Script
+          id="theme-initialization"
+          strategy="beforeInteractive"
           dangerouslySetInnerHTML={{
             __html: `
               (function() {

@@ -8,6 +8,7 @@ interface KpiCardProps {
   description?: string
   delta?: number
   deltaLabel?: string
+  deltaText?: string
   trend?: 'up' | 'down' | 'flat'
   trendGood?: boolean
   accentColor?: string
@@ -21,6 +22,7 @@ export function KpiCard({
   description,
   delta,
   deltaLabel,
+  deltaText,
   trend = 'flat',
   trendGood = true,
   accentColor,
@@ -47,12 +49,6 @@ export function KpiCard({
         <span className="text-[13px] font-semibold text-foreground">
           {label}
         </span>
-        {accentColor && (
-          <span
-            className="w-2 h-2 rounded-full shrink-0"
-            style={{ backgroundColor: accentColor }}
-          />
-        )}
       </div>
 
       {(value !== undefined || delta !== undefined) && (
@@ -72,7 +68,7 @@ export function KpiCard({
             >
               <TrendIcon size={13} strokeWidth={2} />
               <span>
-                {delta > 0 ? '+' : ''}{delta}{deltaLabel ?? ''}
+                {deltaText ?? `${delta > 0 ? '+' : ''}${delta}${deltaLabel ?? ''}`}
               </span>
             </div>
           )}

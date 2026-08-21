@@ -4,7 +4,6 @@ import type {
   ADDomainStatus,
   Alert,
   ScanActivity,
-  TrendData,
   MissingPatch,
   Detection,
   QuarantineItem,
@@ -301,19 +300,6 @@ export const scanActivity: ScanActivity[] = [
   { deviceId: 'dev-002', deviceName: 'NYC-LT-0087', timestamp: hoursAgo(3), score: 71, previousScore: 74, status: 'warning' },
   { deviceId: 'dev-015', deviceName: 'SF-WKS-0199', timestamp: hoursAgo(9), score: 47, previousScore: 60, status: 'critical' },
 ]
-
-// ─── Trend Data (14 days) ─────────────────────────────────────────────────────
-export const complianceTrend: TrendData[] = Array.from({ length: 14 }, (_, i) => {
-  const date = new Date(now)
-  date.setDate(date.getDate() - (13 - i))
-  const base = 72 + i * 1.2 + (Math.sin(i) * 4)
-  return {
-    date: date.toISOString().split('T')[0],
-    average: Math.round(Math.min(100, base)),
-    min: Math.round(Math.max(0, base - 28 + Math.sin(i) * 5)),
-    max: Math.round(Math.min(100, base + 15)),
-  }
-})
 
 // Auth activity for AD page
 export const authActivityTrend = Array.from({ length: 14 }, (_, i) => {

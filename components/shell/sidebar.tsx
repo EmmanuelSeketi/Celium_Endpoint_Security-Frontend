@@ -143,7 +143,7 @@ export function Sidebar() {
                 alt=""
                 width={14}
                 height={14}
-                className={cn('object-contain', active && 'dark:invert')}
+                className="object-contain dark:invert"
               />
               {!collapsed && <span className={cn(active && 'font-medium')}>{label}</span>}
             </Link>
