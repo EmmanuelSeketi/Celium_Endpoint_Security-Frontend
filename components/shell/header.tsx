@@ -1,18 +1,14 @@
 'use client'
 
 import { useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { useSidebar } from '@/lib/sidebar-context'
 import { cn } from '@/lib/utils'
 import {
-  Search,
-  Bell,
   ChevronDown,
-  Calendar,
   User,
   LogOut,
   UserCircle2,
-  Sun,
-  Moon,
 } from 'lucide-react'
 import { alerts } from '@/lib/mock-data'
 import { StatusDot } from '@/components/ui/status-badge'
@@ -20,9 +16,21 @@ import { useTheme } from '@/lib/theme-provider'
 
 const DATE_PRESETS = ['Last 24h', 'Last 7 days', 'Last 30 days', 'Last 90 days']
 
+const PAGE_DETAILS: Record<string, string> = {
+  '/': 'Dashboard',
+  '/devices': 'Devices',
+  '/active-directory': 'Active Directory',
+  '/malware-protection': 'Malware Protection',
+  '/patch-compliance': 'Patch Compliance',
+  '/checks': 'Checks',
+  '/reports': 'Reports',
+  '/settings': 'Settings',
+}
+
 export function Header() {
   const { collapsed } = useSidebar()
   const { theme, toggleTheme } = useTheme()
+  const pathname = usePathname()
   const [dateRange, setDateRange] = useState('Last 7 days')
   const [dateOpen, setDateOpen] = useState(false)
   const [userOpen, setUserOpen] = useState(false)
@@ -30,19 +38,11 @@ export function Header() {
 
   const criticalAlerts = alerts.filter(a => a.severity === 'critical')
   const unreadCount = criticalAlerts.length
+  const pageTitle = PAGE_DETAILS[pathname] ?? 'Fleet Compliance'
 
   return (
-    <header className={cn('fixed top-0 right-0 z-20 h-14 flex items-center gap-3 px-4 border-b border-border bg-background transition-all duration-200', collapsed ? 'left-16' : 'left-60')}>
-      {/* Global Search */}
-      <div className="flex-1 max-w-80 relative">
-        <Search size={14} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-        <input
-          type="text"
-          placeholder="Search devices, alerts, checks..."
-          className="w-full h-8 bg-surface border border-border rounded-md pl-8 pr-16 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
-        />
-        <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 bg-surface-hover border border-border rounded text-[10px] text-muted-foreground font-mono">⌘K</kbd>
-      </div>
+    <header className={cn('fixed top-0 right-0 z-20 h-14 flex items-center gap-4 px-4 border-b border-border bg-card transition-all duration-200', collapsed ? 'left-16' : 'left-60')}>
+      <h1 className="shrink-0 text-[20px] font-semibold text-foreground text-balance leading-tight">{pageTitle}</h1>
 
       <div className="flex-1" />
 
@@ -52,7 +52,7 @@ export function Header() {
           onClick={() => { setDateOpen(!dateOpen); setUserOpen(false); setNotiOpen(false) }}
           className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors border border-border"
         >
-          <Calendar size={13} strokeWidth={1.5} />
+          <img src="/calendar.png" alt="" width={13} height={13} className="object-contain dark:invert" />
           <span>{dateRange}</span>
           <ChevronDown size={12} strokeWidth={2} />
         </button>
@@ -83,7 +83,7 @@ export function Header() {
         className="relative w-8 h-8 flex items-center justify-center rounded-md hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground"
         title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       >
-        {theme === 'dark' ? <Sun size={15} strokeWidth={1.5} /> : <Moon size={15} strokeWidth={1.5} />}
+        <img src="/night-mode.png" alt="" width={15} height={15} className="object-contain dark:invert" />
       </button>
 
       {/* Notifications */}
@@ -92,7 +92,7 @@ export function Header() {
           onClick={() => { setNotiOpen(!notiOpen); setDateOpen(false); setUserOpen(false) }}
           className="relative w-8 h-8 flex items-center justify-center rounded-md hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground"
         >
-          <Bell size={15} strokeWidth={1.5} />
+          <img src="/notifications.png" alt="" width={15} height={15} className="object-contain dark:invert" />
           {unreadCount > 0 && (
             <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-status-critical rounded-full flex items-center justify-center text-[9px] font-bold text-white leading-none">
               {unreadCount}

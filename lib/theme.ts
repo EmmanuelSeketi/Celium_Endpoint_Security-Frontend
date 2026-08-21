@@ -4,10 +4,10 @@
  */
 
 export const STATUS_COLORS = {
-  critical: '#F04438',
-  warning: '#F79009',
-  compliant: '#008080',
-  success: '#008080',
+  critical: '#bd271e',
+  warning: '#fec514',
+  compliant: '#54b399',
+  success: '#54b399',
   info: '#3B82F6',
   unknown: '#6B7280',
   offline: '#6B7280',

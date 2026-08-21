@@ -69,7 +69,7 @@ export function DataTable<T extends Record<string, unknown>>({
               <th
                 key={col.key}
                 className={cn(
-                  'py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground whitespace-nowrap select-none',
+                  'py-2 px-3 text-[11px] font-semibold uppercase tracking-wider text-foreground whitespace-nowrap select-none',
                   col.align === 'right' ? 'text-right' : col.align === 'center' ? 'text-center' : 'text-left',
                   col.sortable && 'cursor-pointer hover:text-foreground transition-colors'
                 )}

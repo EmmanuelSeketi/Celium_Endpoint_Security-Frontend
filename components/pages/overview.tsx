@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowRight, Network, ShieldAlert, RefreshCw, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react'
+import { ArrowRight, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
   devices,
@@ -12,7 +12,7 @@ import {
   complianceChecks,
   getFleetStats,
 } from '@/lib/mock-data'
-import { CATEGORY_COLORS, getComplianceScoreColor, getStatusColor } from '@/lib/theme'
+import { getComplianceScoreColor, getStatusColor } from '@/lib/theme'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
@@ -95,7 +95,7 @@ export function OverviewPage() {
       />
 
       {/* KPI Row */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
           label="Avg Compliance Score"
           value={`${stats.avgScore}%`}
@@ -118,23 +118,23 @@ export function OverviewPage() {
                 warning={stats.warning}
                 critical={stats.critical}
                 total={stats.total}
-                size={80}
+                size={96}
                 showTotal={false}
               />
             </div>
-            <div className="flex flex-col gap-1.5 text-[11px] min-w-0">
+            <div className="flex flex-col gap-1.5 text-[11px] min-w-0 ml-2">
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#008080] shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-status-success shrink-0" />
                 <span className="truncate">Compliant</span>
                 <span className="font-mono text-foreground font-medium">{stats.compliant}</span>
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#F79009] shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-status-warning shrink-0" />
                 <span className="truncate">Warning</span>
                 <span className="font-mono text-foreground font-medium">{stats.warning}</span>
               </div>
               <div className="flex items-center gap-1.5 text-muted-foreground">
-                <span className="w-1.5 h-1.5 rounded-full bg-[#F04438] shrink-0" />
+                <span className="w-2 h-2 rounded-full bg-status-critical shrink-0" />
                 <span className="truncate">Critical</span>
                 <span className="font-mono text-foreground font-medium">{stats.critical}</span>
               </div>
@@ -165,13 +165,26 @@ export function OverviewPage() {
       </div>
 
       {/* Category Health Row */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Link href="/active-directory" className="block group">
-          <div className="bg-card border border-border rounded-md p-4 hover:border-[#8B7FE8]/40 hover:bg-surface-hover transition-colors">
+          <div className="bg-card border border-border rounded-md shadow-sm p-4 hover:border-brand/50 hover:bg-surface-hover transition-colors">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${CATEGORY_COLORS.active_directory}18` }}>
-                  <Network size={15} strokeWidth={1.5} style={{ color: CATEGORY_COLORS.active_directory }} />
+                <div className="w-8 h-8 rounded-md bg-surface-hover flex items-center justify-center">
+                  <span
+                    aria-hidden="true"
+                    className="h-5 w-5 bg-foreground"
+                    style={{
+                      maskImage: 'url(/active-directory.png)',
+                      WebkitMaskImage: 'url(/active-directory.png)',
+                      maskRepeat: 'no-repeat',
+                      WebkitMaskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskPosition: 'center',
+                      maskSize: '130%',
+                      WebkitMaskSize: '130%',
+                    }}
+                  />
                 </div>
                 <span className="text-[13px] font-semibold text-foreground">Active Directory</span>
               </div>
@@ -180,11 +193,11 @@ export function OverviewPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Domain Controllers</span>
-                <span className="font-semibold text-[#008080] font-mono">3/3 healthy</span>
+                <span className="font-semibold text-status-success font-mono">3/3 healthy</span>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Failed logons (24h)</span>
-                <span className="font-mono text-[#F79009]">47</span>
+                <span className="font-mono text-status-warning">47</span>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Stale accounts</span>
@@ -195,11 +208,24 @@ export function OverviewPage() {
         </Link>
 
         <Link href="/malware-protection" className="block group">
-          <div className="bg-card border border-border rounded-md p-4 hover:border-[#E87F9B]/40 hover:bg-surface-hover transition-colors">
+          <div className="bg-card border border-border rounded-md shadow-sm p-4 hover:border-brand/50 hover:bg-surface-hover transition-colors">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${CATEGORY_COLORS.malware_protection}18` }}>
-                  <ShieldAlert size={15} strokeWidth={1.5} style={{ color: CATEGORY_COLORS.malware_protection }} />
+                <div className="w-8 h-8 rounded-md bg-surface-hover flex items-center justify-center">
+                  <span
+                    aria-hidden="true"
+                    className="h-5 w-5 bg-foreground"
+                    style={{
+                      maskImage: 'url(/malware.png)',
+                      WebkitMaskImage: 'url(/malware.png)',
+                      maskRepeat: 'no-repeat',
+                      WebkitMaskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskPosition: 'center',
+                      maskSize: '130%',
+                      WebkitMaskSize: '130%',
+                    }}
+                  />
                 </div>
                 <span className="text-[13px] font-semibold text-foreground">Malware Protection</span>
               </div>
@@ -208,19 +234,19 @@ export function OverviewPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">RTP coverage</span>
-                <span className={`font-semibold font-mono ${stats.rtpCoverage >= 95 ? 'text-[#008080]' : 'text-[#F79009]'}`}>
+                  <span className={`font-semibold font-mono ${stats.rtpCoverage >= 95 ? 'text-status-success' : 'text-status-warning'}`}>
                   {stats.rtpCoverage}%
                 </span>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Definitions up to date</span>
-                <span className={`font-mono ${stats.defCompliance >= 90 ? 'text-[#008080]' : 'text-[#F79009]'}`}>
+                  <span className={`font-mono ${stats.defCompliance >= 90 ? 'text-status-success' : 'text-status-warning'}`}>
                   {stats.defCompliance}%
                 </span>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Active detections</span>
-                <span className={`font-mono ${stats.activeDetections > 0 ? 'text-[#F04438]' : 'text-[#008080]'}`}>
+                  <span className={`font-mono ${stats.activeDetections > 0 ? 'text-status-critical' : 'text-status-success'}`}>
                   {stats.activeDetections}
                 </span>
               </div>
@@ -229,11 +255,24 @@ export function OverviewPage() {
         </Link>
 
         <Link href="/patch-compliance" className="block group">
-          <div className="bg-card border border-border rounded-md p-4 hover:border-[#7FC4E8]/40 hover:bg-surface-hover transition-colors">
+          <div className="bg-card border border-border rounded-md shadow-sm p-4 hover:border-brand/50 hover:bg-surface-hover transition-colors">
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded flex items-center justify-center" style={{ backgroundColor: `${CATEGORY_COLORS.os_updates}18` }}>
-                  <RefreshCw size={15} strokeWidth={1.5} style={{ color: CATEGORY_COLORS.os_updates }} />
+                <div className="w-8 h-8 rounded-md bg-surface-hover flex items-center justify-center">
+                  <span
+                    aria-hidden="true"
+                    className="h-5 w-5 bg-foreground"
+                    style={{
+                      maskImage: 'url(/software-patch.png)',
+                      WebkitMaskImage: 'url(/software-patch.png)',
+                      maskRepeat: 'no-repeat',
+                      WebkitMaskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskPosition: 'center',
+                      maskSize: '130%',
+                      WebkitMaskSize: '130%',
+                    }}
+                  />
                 </div>
                 <span className="text-[13px] font-semibold text-foreground">Patch Compliance</span>
               </div>
@@ -242,19 +281,19 @@ export function OverviewPage() {
             <div className="space-y-2">
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Fully patched</span>
-                <span className={`font-semibold font-mono ${stats.patchCompliance >= 85 ? 'text-[#008080]' : 'text-[#F79009]'}`}>
+                  <span className={`font-semibold font-mono ${stats.patchCompliance >= 85 ? 'text-status-success' : 'text-status-warning'}`}>
                   {stats.patchCompliance}%
                 </span>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Missing critical (fleet)</span>
-                <span className={`font-mono ${stats.missingCriticalTotal > 0 ? 'text-[#F04438]' : 'text-[#008080]'}`}>
+                  <span className={`font-mono ${stats.missingCriticalTotal > 0 ? 'text-status-critical' : 'text-status-success'}`}>
                   {stats.missingCriticalTotal}
                 </span>
               </div>
               <div className="flex justify-between text-[13px]">
                 <span className="text-muted-foreground">Pending reboot</span>
-                <span className={`font-mono ${stats.pendingReboot > 2 ? 'text-[#F79009]' : 'text-foreground'}`}>
+                  <span className={`font-mono ${stats.pendingReboot > 2 ? 'text-status-warning' : 'text-foreground'}`}>
                   {stats.pendingReboot}
                 </span>
               </div>
@@ -264,7 +303,7 @@ export function OverviewPage() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
         {/* Left Column */}
         <div className="space-y-4">
           {/* Alerts Feed */}
@@ -322,7 +361,7 @@ export function OverviewPage() {
                   </div>
                   <span className="inline-flex items-center gap-2">
                     <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: getStatusColor(s.status) }} />
-                    <span className="text-[12px] font-medium capitalize" style={{ color: '#334155' }}>{s.status}</span>
+                    <span className="text-[12px] font-medium capitalize text-foreground">{s.status}</span>
                   </span>
                   <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
                     {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })}
@@ -441,7 +480,7 @@ export function OverviewPage() {
                 <td className="px-3">
                   <span className="inline-flex items-center gap-2">
                     <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: getStatusColor(d.status) }} />
-                    <span className="text-[12px] font-medium capitalize" style={{ color: '#334155' }}>{d.status}</span>
+                    <span className="text-[12px] font-medium capitalize text-foreground">{d.status}</span>
                   </span>
                 </td>
                 <td className="px-3">

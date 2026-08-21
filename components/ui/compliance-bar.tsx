@@ -109,9 +109,9 @@ interface ComplianceDonutProps {
 }
 
 const DONUT_COLORS = {
-  compliant: '#008080',
-  warning: '#F79009',
-  critical: '#F04438',
+  compliant: STATUS_COLORS.compliant,
+  warning: STATUS_COLORS.warning,
+  critical: STATUS_COLORS.critical,
 }
 
 function DonutTooltip({ active, payload }: { active?: boolean; payload?: { name?: string; value?: number; payload?: { fill?: string } }[] }) {
@@ -138,10 +138,10 @@ export function ComplianceDonut({ compliant, warning, critical, total, size = 14
   const centerX = size / 2
   const centerY = size / 2
   const outerRadius = size / 2 - 4
-  const innerRadius = outerRadius - 14
+  const innerRadius = outerRadius - 11
 
   return (
-    <div className="relative" style={{ width: size, height: size }}>
+    <div className="relative flex items-center justify-center drop-shadow-sm" style={{ width: size, height: size }}>
       <ResponsiveContainer width="100%" height="100%">
         <PieChart>
           <Pie

@@ -117,7 +117,7 @@ export function SettingsPage() {
       <div className="flex gap-4">
         {/* Sidebar nav */}
         <div className="w-48 shrink-0">
-          <nav className="bg-card border border-border rounded-md p-1.5 space-y-0.5">
+          <nav className="bg-card border border-border rounded-md shadow-sm p-1.5 space-y-0.5">
             {SECTIONS.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}

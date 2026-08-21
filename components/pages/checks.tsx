@@ -32,7 +32,7 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
           <div className="flex-1 pr-4">
             <div className="flex items-center gap-2 mb-1.5">
               <StatusBadge status={check.severity === 'critical' ? 'critical' : check.severity === 'warning' ? 'warning' : 'compliant'} size="sm" />
-              <span className="text-[11px] text-muted-foreground uppercase tracking-wider font-medium">
+              <span className="text-[11px] text-foreground uppercase tracking-wider font-medium">
                 {CATEGORY_LABELS[check.category]}
               </span>
             </div>
@@ -62,14 +62,14 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
           <div>
             <div className="flex items-center gap-1.5 mb-2">
               <Info size={13} strokeWidth={1.5} className="text-muted-foreground" />
-              <h3 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider">Description</h3>
+              <h3 className="text-[12px] font-semibold text-foreground uppercase tracking-wider">Description</h3>
             </div>
             <p className="text-[13px] text-foreground leading-relaxed">{check.description}</p>
           </div>
 
           {/* Remediation */}
           <div className="bg-surface border border-border rounded-md p-4">
-            <h3 className="text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Remediation Steps</h3>
+            <h3 className="text-[12px] font-semibold text-foreground uppercase tracking-wider mb-2">Remediation Steps</h3>
             <p className="text-[13px] text-foreground leading-relaxed">{check.remediation}</p>
           </div>
         </div>
@@ -116,8 +116,8 @@ export function ChecksPage() {
             { label: 'Critical Checks', value: criticalCount, color: '#F04438' },
             { label: 'Warning Checks', value: warningCount, color: '#F79009' },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-card border border-border rounded-md p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+            <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">{label}</p>
               <p className="text-[30px] font-semibold leading-none tabular-nums" style={color ? { color } : undefined}>{value}</p>
             </div>
           ))}

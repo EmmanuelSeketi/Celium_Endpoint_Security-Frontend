@@ -188,7 +188,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                   { label: 'MAC Address', value: device.mac, mono: true },
                 ].map(item => (
                   <div key={item.label} className="bg-surface border border-border rounded-md p-3">
-                    <p className="text-[11px] uppercase tracking-wider text-muted-foreground font-medium">{item.label}</p>
+                    <p className="text-[11px] uppercase tracking-wider text-foreground font-medium">{item.label}</p>
                     <p className={cn('text-[13px] text-foreground mt-1', item.mono && 'font-mono')}>{item.value}</p>
                   </div>
                 ))}
@@ -313,16 +313,16 @@ export function DevicesPage() {
         <PageHeader
           title="Devices"
           description={`${allDevices.length} endpoints in the fleet.`}
+          className="pt-4"
           action={
             <button className="flex items-center gap-2 px-3 py-1.5 bg-brand text-white rounded-md text-[13px] font-medium hover:bg-brand/90 transition-colors">
               <Plus size={14} strokeWidth={2} />
               Add Device
             </button>
           }
-        />
-
-        {/* Filter bar */}
-        <div className="flex items-center gap-2 flex-wrap">
+        >
+          {/* Filter bar */}
+          <div className="flex items-center gap-2 flex-wrap">
           <div className="relative flex-1 min-w-48 max-w-72">
             <Search size={13} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
@@ -425,7 +425,8 @@ export function DevicesPage() {
               Clear all
             </button>
           )}
-        </div>
+          </div>
+        </PageHeader>
 
         <SectionCard noPadding>
           <table className="w-full text-[13px]">

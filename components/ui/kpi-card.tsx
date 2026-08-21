@@ -39,12 +39,12 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        'bg-card border border-border rounded-md p-4 flex flex-col gap-2 h-full',
+        'bg-card border border-border rounded-md shadow-sm p-4 flex flex-col gap-2 h-full',
         className
       )}
     >
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <span className="text-[13px] font-semibold text-foreground">
           {label}
         </span>
         {accentColor && (

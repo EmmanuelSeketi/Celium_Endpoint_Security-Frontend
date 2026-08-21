@@ -10,8 +10,6 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
-  Area,
-  AreaChart,
   Cell,
   ReferenceDot,
   Legend,
@@ -55,28 +53,21 @@ export function ComplianceLineChart({ data, height = 160 }: ComplianceLineChartP
   const formatted = data.map(d => ({ ...d, date: d.date.slice(5) }))
   return (
     <ResponsiveContainer width="100%" height={height}>
-      <AreaChart data={formatted} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-        <defs>
-          <linearGradient id="compGrad" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="5%" stopColor={BRAND} stopOpacity={0.12} />
-            <stop offset="95%" stopColor={BRAND} stopOpacity={0.01} />
-          </linearGradient>
-        </defs>
+      <LineChart data={formatted} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
         <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="date" tick={AXIS_STYLE} axisLine={false} tickLine={false} interval={3} />
         <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} domain={[40, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ stroke: CHART_GRID, strokeWidth: 1 }} />
-        <Area
+        <Line
           type="monotone"
           dataKey="average"
           name="Score %"
           stroke={BRAND}
           strokeWidth={2}
-          fill="url(#compGrad)"
           dot={false}
           activeDot={{ r: 4, fill: BRAND, stroke: 'var(--background)', strokeWidth: 2 }}
         />
-      </AreaChart>
+      </LineChart>
     </ResponsiveContainer>
   )
 }
@@ -143,7 +134,11 @@ interface OSComplianceBarChartProps {
 }
 
 export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChartProps) {
-  const colors = [BRAND, CATEGORY_COLORS.malware_protection, CATEGORY_COLORS.os_updates]
+  const osColors: Record<string, string> = {
+    Windows: '#0078D4',
+    macOS: '#E85D9E',
+    Linux: '#F59E0B',
+  }
 
   function CustomAxisTick(props: any) {
     const { x, y, payload } = props
@@ -195,8 +190,8 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
         <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} domain={[0, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-hover)', stroke: CHART_GRID, strokeWidth: 1 }} />
         <Bar dataKey="score" name="Avg Score %" radius={[4, 4, 0, 0]}>
-          {data.map((_, i) => (
-            <Cell key={i} fill={colors[i % colors.length]} />
+          {data.map((entry) => (
+            <Cell key={entry.os} fill={osColors[entry.os] ?? BRAND} />
           ))}
         </Bar>
       </BarChart>

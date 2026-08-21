@@ -77,8 +77,8 @@ export function PatchCompliancePage() {
             color: eolDevices.length > 0 ? '#F04438' : '#008080',
           },
         ].map(({ label, value, description, color }) => (
-          <div key={label} className="bg-card border border-border rounded-md p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{label}</p>
+          <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">{label}</p>
             <p className="text-[30px] font-semibold leading-none tabular-nums mb-1" style={{ color }}>{value}</p>
             <p className="text-[12px] text-muted-foreground">{description}</p>
           </div>
@@ -119,7 +119,7 @@ export function PatchCompliancePage() {
         {/* Critical patches */}
         <SectionCard title="Critical Missing Patches" className="lg:col-span-2">
           <div className="space-y-0">
-            <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border">
+            <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border">
               <span className="col-span-1">Sev</span>
               <span className="col-span-5">Patch</span>
               <span className="col-span-3">CVE</span>
@@ -183,7 +183,7 @@ export function PatchCompliancePage() {
       {/* Device patch table */}
       <SectionCard title="Device Patch Status" description="All managed devices sorted by patch exposure.">
         <div className="space-y-0">
-          <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border">
+          <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border">
             <span className="col-span-3">Device</span>
             <span className="col-span-3">OS</span>
             <span className="col-span-2 text-center">Missing Critical</span>

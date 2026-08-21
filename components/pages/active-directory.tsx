@@ -193,7 +193,7 @@ export function ActiveDirectoryPage() {
       {/* Privileged Group Changes */}
       <SectionCard title="Privileged Group Changes" description="Recent modifications to high-privilege AD groups.">
         <div className="space-y-0">
-          <div className="grid grid-cols-4 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground border-b border-border">
+          <div className="grid grid-cols-4 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border">
             <span>Time</span>
             <span>Account</span>
             <span>Group</span>
@@ -224,8 +224,8 @@ export function ActiveDirectoryPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="bg-card border border-border rounded-md p-4 col-span-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-3">Logon Summary (24h)</p>
+        <div className="bg-card border border-border rounded-md shadow-sm p-4 col-span-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-3">Logon Summary (24h)</p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={16} strokeWidth={1.5} className="text-[#008080]" />
@@ -244,16 +244,16 @@ export function ActiveDirectoryPage() {
             </div>
           </div>
         </div>
-        <div className="bg-card border border-border rounded-md p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Stale Accounts</p>
+        <div className="bg-card border border-border rounded-md shadow-sm p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">Stale Accounts</p>
           <div className="flex items-center gap-2">
             <Users size={16} strokeWidth={1.5} className="text-[#F79009]" />
             <span className="text-[30px] font-semibold tabular-nums text-[#F79009]">{staleAccounts}</span>
           </div>
           <p className="text-[11px] text-muted-foreground mt-1">No login in 90+ days</p>
         </div>
-        <div className="bg-card border border-border rounded-md p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Group Changes (7d)</p>
+        <div className="bg-card border border-border rounded-md shadow-sm p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">Group Changes (7d)</p>
           <div className="flex items-center gap-2">
             <Clock size={16} strokeWidth={1.5} className="text-brand" />
             <span className="text-[30px] font-semibold tabular-nums text-brand">{privilegedGroupChanges.length}</span>

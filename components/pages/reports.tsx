@@ -57,7 +57,7 @@ function GenerateModal({ onClose }: { onClose: () => void }) {
         </div>
         <div className="p-5 space-y-4">
           <div>
-            <label className="block text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Report Type</label>
+            <label className="block text-[12px] font-semibold text-foreground uppercase tracking-wider mb-2">Report Type</label>
             <div className="space-y-1.5">
               {REPORT_TYPES.map(t => (
                 <button
@@ -77,7 +77,7 @@ function GenerateModal({ onClose }: { onClose: () => void }) {
             </div>
           </div>
           <div>
-            <label className="block text-[12px] font-semibold text-muted-foreground uppercase tracking-wider mb-2">Format</label>
+            <label className="block text-[12px] font-semibold text-foreground uppercase tracking-wider mb-2">Format</label>
             <div className="flex items-center gap-2">
               {(['PDF', 'CSV'] as const).map(f => (
                 <button
@@ -147,16 +147,16 @@ export function ReportsPage() {
         />
 
         {/* Type summary */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {REPORT_TYPES.map(type => {
             const count = reports.filter(r => r.type === type).length
             return (
-              <div key={type} className="bg-card border border-border rounded-md p-3">
+              <div key={type} className="bg-card border border-border rounded-md shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: TYPE_COLORS[type] }} />
-                  <span className="text-[11px] text-muted-foreground font-medium">{type}</span>
+                  <span className="text-[11px] text-foreground font-semibold uppercase tracking-wider">{type}</span>
                 </div>
-                <p className="text-[24px] font-semibold tabular-nums" style={{ color: TYPE_COLORS[type] }}>{count}</p>
+                <p className="text-[30px] font-semibold leading-none tabular-nums text-foreground">{count}</p>
               </div>
             )
           })}
@@ -169,7 +169,7 @@ export function ReportsPage() {
                 {['Report Name', 'Type', 'Date Range', 'Format', 'Generated', ''].map((h, i) => (
                   <th
                     key={i}
-                    className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground text-left"
+                    className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground text-left"
                   >
                     {h}
                   </th>
