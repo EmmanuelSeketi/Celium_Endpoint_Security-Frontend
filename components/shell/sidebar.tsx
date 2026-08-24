@@ -75,7 +75,7 @@ export function Sidebar() {
                 <Link
                   href={href}
                   className={cn(
-                    'flex items-center gap-2.5 rounded-md text-[13px] transition-colors relative group',
+                    'flex items-center gap-2.5 rounded-full text-[12px] font-medium text-black transition-colors relative group',
                     collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5',
                     active
                       ? 'bg-surface-hover text-foreground'
@@ -111,8 +111,8 @@ export function Sidebar() {
                       )}
                     />
                   )}
-                  {!collapsed && (
-                    <span className={cn(active && 'font-medium')}>{label}</span>
+                    {!collapsed && (
+                    <span>{label}</span>
                   )}
                 </Link>
               </li>
@@ -130,7 +130,7 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex items-center gap-2.5 rounded-md text-[13px] transition-colors relative',
+                'flex items-center gap-2.5 rounded-full text-[12px] font-medium text-black transition-colors relative',
                 collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5',
                 active
                   ? 'bg-surface-hover text-foreground'
@@ -145,7 +145,7 @@ export function Sidebar() {
                 height={14}
                 className="object-contain dark:invert"
               />
-              {!collapsed && <span className={cn(active && 'font-medium')}>{label}</span>}
+              {!collapsed && <span>{label}</span>}
             </Link>
           )
         })}
@@ -154,7 +154,7 @@ export function Sidebar() {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            'flex items-center gap-2.5 rounded-md text-[13px] transition-colors text-foreground hover:text-foreground hover:bg-surface-hover w-full',
+            'flex items-center gap-2.5 rounded-full text-[12px] font-medium text-black transition-colors hover:text-black hover:bg-surface-hover w-full',
             collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5'
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}

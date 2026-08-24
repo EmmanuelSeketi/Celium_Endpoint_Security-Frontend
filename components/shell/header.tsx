@@ -42,7 +42,7 @@ export function Header() {
 
   return (
     <header className={cn('fixed top-0 right-0 z-20 h-14 flex items-center gap-4 px-4 border-b border-border bg-card transition-all duration-200', collapsed ? 'left-16' : 'left-60')}>
-      <h1 className="shrink-0 text-[20px] font-semibold text-foreground text-balance leading-tight">{pageTitle}</h1>
+      <h1 className="shrink-0 rounded-full border border-border bg-card px-3 py-1 text-[20px] font-semibold text-foreground text-balance leading-tight">{pageTitle}</h1>
 
       <div className="flex-1" />
 
@@ -50,7 +50,7 @@ export function Header() {
       <div className="relative">
         <button
           onClick={() => { setDateOpen(!dateOpen); setUserOpen(false); setNotiOpen(false) }}
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors border border-border"
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[13px] text-muted-foreground hover:text-foreground hover:bg-surface-hover transition-colors border border-border"
         >
           <img src="/calendar.png" alt="" width={13} height={13} className="object-contain dark:invert" />
           <span>{dateRange}</span>
@@ -80,7 +80,7 @@ export function Header() {
       {/* Theme Toggle */}
       <button
         onClick={() => toggleTheme()}
-        className="relative w-8 h-8 flex items-center justify-center rounded-md hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground"
+        className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground"
         title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
       >
         <img src="/night-mode.png" alt="" width={15} height={15} className="object-contain dark:invert" />
@@ -90,7 +90,7 @@ export function Header() {
       <div className="relative">
         <button
           onClick={() => { setNotiOpen(!notiOpen); setDateOpen(false); setUserOpen(false) }}
-          className="relative w-8 h-8 flex items-center justify-center rounded-md hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground"
+          className="relative w-8 h-8 flex items-center justify-center rounded-full hover:bg-surface-hover transition-colors text-muted-foreground hover:text-foreground"
         >
           <img src="/notifications.png" alt="" width={15} height={15} className="object-contain dark:invert" />
           {unreadCount > 0 && (
@@ -129,7 +129,7 @@ export function Header() {
       <div className="relative">
         <button
           onClick={() => { setUserOpen(!userOpen); setDateOpen(false); setNotiOpen(false) }}
-          className="flex items-center gap-2 h-8 rounded-md hover:bg-surface-hover transition-colors px-1.5"
+          className="flex items-center gap-2 h-8 rounded-full hover:bg-surface-hover transition-colors px-1.5"
         >
           <div className="w-6 h-6 rounded-full bg-brand/20 flex items-center justify-center text-[11px] font-semibold text-brand">
             JS

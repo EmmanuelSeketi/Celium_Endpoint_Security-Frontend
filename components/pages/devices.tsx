@@ -22,7 +22,7 @@ const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
 type Severity = 'compliant' | 'warning' | 'critical'
 
 const SEVERITY: Record<Severity, { dot: string; label: string }> = {
-  compliant: { dot: STATUS_COLORS.compliant, label: 'Compliant' },
+  compliant: { dot: STATUS_COLORS.compliant, label: 'Healthy' },
   warning: { dot: STATUS_COLORS.warning, label: 'Warning' },
   critical: { dot: STATUS_COLORS.critical, label: 'Critical' },
 }
@@ -51,7 +51,7 @@ function StatusIndicator({ status, className }: { status: DeviceStatus; classNam
     <span className={cn('inline-flex items-center gap-2', className)}>
       <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
       <span className="text-[12px] font-medium capitalize" style={{ color: SEVERITY_TEXT }}>
-        {status}
+        {s.label}
       </span>
     </span>
   )

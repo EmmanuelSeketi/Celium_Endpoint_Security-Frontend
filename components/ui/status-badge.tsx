@@ -52,7 +52,7 @@ interface StatusBadgeProps {
 export function StatusBadge({ status, label, className, size = 'md' }: StatusBadgeProps) {
   const color = getStatusColor(status)
   const Icon = STATUS_ICONS[status as keyof typeof STATUS_ICONS] ?? Minus
-  const displayLabel = label ?? status.charAt(0).toUpperCase() + status.slice(1)
+  const displayLabel = label ?? (status === 'compliant' ? 'Healthy' : status.charAt(0).toUpperCase() + status.slice(1))
 
   return (
     <span

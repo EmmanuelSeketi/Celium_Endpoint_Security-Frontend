@@ -66,7 +66,7 @@ export function StackedFleetBar({
         <div
           className="transition-all"
           style={{ width: `${compPct}%`, backgroundColor: '#008080' }}
-          title={`Compliant: ${compliant}`}
+          title={`Healthy: ${compliant}`}
         />
         <div
           className="transition-all"
@@ -83,7 +83,7 @@ export function StackedFleetBar({
         <div className="flex items-center gap-4 text-[12px]">
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <span className="w-2 h-2 rounded-full bg-[#008080]" />
-            Compliant <span className="font-mono text-foreground">{compliant}</span>
+            Healthy <span className="font-mono text-foreground">{compliant}</span>
           </span>
           <span className="flex items-center gap-1.5 text-muted-foreground">
             <span className="w-2 h-2 rounded-full bg-[#F79009]" />
@@ -130,7 +130,7 @@ function DonutTooltip({ active, payload }: { active?: boolean; payload?: { name?
 
 export function ComplianceDonut({ compliant, warning, critical, total, size = 140, showTotal = true }: ComplianceDonutProps) {
   const data = [
-    { name: 'Compliant', value: compliant, fill: DONUT_COLORS.compliant },
+    { name: 'Healthy', value: compliant, fill: DONUT_COLORS.compliant },
     { name: 'Warning', value: warning, fill: DONUT_COLORS.warning },
     { name: 'Critical', value: critical, fill: DONUT_COLORS.critical },
   ].filter(d => d.value > 0)

@@ -96,18 +96,19 @@ export function OverviewPage() {
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
-          label="Avg Compliance Score"
+          label="Average Fleet Score"
           value={`${stats.avgScore}%`}
-          delta={+3}
-          deltaLabel=" pts vs last period"
-          trend="up"
-          trendGood={true}
-          description="Good · Improving"
+          className="pt-9"
+          description={
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full bg-status-success shrink-0" />
+              Healthy
+            </span>
+          }
         />
 
         <KpiCard
           label="Total Devices"
-          value={stats.total}
         >
           <div className="flex items-center gap-4">
             <div className="shrink-0">
@@ -117,24 +118,20 @@ export function OverviewPage() {
                 critical={stats.critical}
                 total={stats.total}
                 size={96}
-                showTotal={false}
               />
             </div>
-            <div className="flex flex-col gap-1.5 text-[11px] min-w-0 ml-2">
-              <div className="flex items-center gap-1.5 text-muted-foreground">
+            <div className="flex flex-col gap-1.5 text-[12px] font-medium text-black dark:text-white min-w-0 ml-2">
+              <div className="flex items-center gap-1.5 text-black dark:text-white">
                 <span className="w-2 h-2 rounded-full bg-status-success shrink-0" />
-                <span className="truncate">Compliant</span>
-                <span className="font-mono text-foreground font-medium">{stats.compliant}</span>
+                <span className="truncate">Healthy ({stats.compliant})</span>
               </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-black dark:text-white">
                 <span className="w-2 h-2 rounded-full bg-status-warning shrink-0" />
-                <span className="truncate">Warning</span>
-                <span className="font-mono text-foreground font-medium">{stats.warning}</span>
+                <span className="truncate">Warning ({stats.warning})</span>
               </div>
-              <div className="flex items-center gap-1.5 text-muted-foreground">
+              <div className="flex items-center gap-1.5 text-black dark:text-white">
                 <span className="w-2 h-2 rounded-full bg-status-critical shrink-0" />
-                <span className="truncate">Critical</span>
-                <span className="font-mono text-foreground font-medium">{stats.critical}</span>
+                <span className="truncate">Critical ({stats.critical})</span>
               </div>
             </div>
           </div>
@@ -142,116 +139,80 @@ export function OverviewPage() {
 
         <KpiCard
           label="Devices Needing Attention"
-          value={stats.needingAttention}
-          delta={-2}
-          deltaText="2 fewer vs last period"
-          trend="down"
-          trendGood={true}
-          description="Devices requiring remediation"
-          accentColor="#F79009"
+          className="pt-9"
+          childrenClassName="mt-0"
         >
-          <div className="flex items-center gap-3 text-[12px] font-medium">
-            <span className="text-status-warning">{stats.warning} Warning</span>
-            <span className="text-muted-foreground">·</span>
-            <span className="text-status-critical">{stats.critical} Critical</span>
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-[30px] font-semibold leading-none tabular-nums text-black dark:text-white">
+              {stats.needingAttention}
+            </span>
+            <div className="flex flex-col gap-1.5 pt-6 text-[12px] font-medium text-black dark:text-white">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-status-warning shrink-0" />
+                Warning ({stats.warning})
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-status-critical shrink-0" />
+                Critical ({stats.critical})
+              </span>
+            </div>
           </div>
         </KpiCard>
 
         <KpiCard
           label="Avg MTTR"
           value="4.2h"
-          delta={-0.8}
-          deltaText="0.8h faster vs last period"
-          trend="down"
-          trendGood={true}
+          className="pt-9"
           description="Improving · Lower is better"
         />
       </div>
 
       {/* Category Health Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-3">
         <Link href="/active-directory" className="block group">
-          <div className="bg-card border border-border rounded-md shadow-sm p-4 hover:border-brand/50 hover:bg-surface-hover transition-colors">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-md bg-surface-hover flex items-center justify-center">
-                  <span
-                    aria-hidden="true"
-                    className="h-5 w-5 bg-foreground"
-                    style={{
-                      maskImage: 'url(/active-directory.png)',
-                      WebkitMaskImage: 'url(/active-directory.png)',
-                      maskRepeat: 'no-repeat',
-                      WebkitMaskRepeat: 'no-repeat',
-                      maskPosition: 'center',
-                      WebkitMaskPosition: 'center',
-                      maskSize: '130%',
-                      WebkitMaskSize: '130%',
-                    }}
-                  />
-                </div>
-                <span className="text-[13px] font-semibold text-foreground">Active Directory</span>
-              </div>
-              <ArrowRight size={14} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+          <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-sm px-4 pb-4 pt-8 hover:border-brand/50 hover:bg-surface-hover transition-colors">
+            <div className="absolute left-1/2 -top-3 -translate-x-1/2 z-10 bg-card border border-border rounded-full px-5 py-1 text-center whitespace-nowrap">
+              <span className="text-[12px] font-semibold text-black dark:text-white">Active Directory</span>
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Domain Controllers</span>
-                <span className="font-semibold text-status-success font-mono">3/3 healthy</span>
+            <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Domain Controllers</span>
+                <span className="text-black dark:text-white tabular-nums">healthy (3/3)</span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Failed logons (24h)</span>
-                <span className="font-mono text-status-warning">47</span>
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Failed logons (24h)</span>
+                <span className="text-black dark:text-white tabular-nums">(47)</span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Stale accounts</span>
-                <span className="font-mono text-foreground">11</span>
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Stale accounts</span>
+                <span className="text-black dark:text-white tabular-nums">(11)</span>
               </div>
             </div>
           </div>
         </Link>
 
         <Link href="/malware-protection" className="block group">
-          <div className="bg-card border border-border rounded-md shadow-sm p-4 hover:border-brand/50 hover:bg-surface-hover transition-colors">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-md bg-surface-hover flex items-center justify-center">
-                  <span
-                    aria-hidden="true"
-                    className="h-5 w-5 bg-foreground"
-                    style={{
-                      maskImage: 'url(/malware.png)',
-                      WebkitMaskImage: 'url(/malware.png)',
-                      maskRepeat: 'no-repeat',
-                      WebkitMaskRepeat: 'no-repeat',
-                      maskPosition: 'center',
-                      WebkitMaskPosition: 'center',
-                      maskSize: '130%',
-                      WebkitMaskSize: '130%',
-                    }}
-                  />
-                </div>
-                <span className="text-[13px] font-semibold text-foreground">Malware Protection</span>
-              </div>
-              <ArrowRight size={14} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+          <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-sm px-4 pb-4 pt-8 hover:border-brand/50 hover:bg-surface-hover transition-colors">
+            <div className="absolute left-1/2 -top-3 -translate-x-1/2 z-10 bg-card border border-border rounded-full px-5 py-1 text-center whitespace-nowrap">
+              <span className="text-[12px] font-semibold text-black dark:text-white">Malware Protection</span>
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">RTP coverage</span>
-                  <span className={`font-semibold font-mono ${stats.rtpCoverage >= 95 ? 'text-status-success' : 'text-status-warning'}`}>
-                  {stats.rtpCoverage}%
+            <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">RTP coverage</span>
+                  <span className="text-black dark:text-white tabular-nums">
+                  ({stats.rtpCoverage}%)
                 </span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Definitions up to date</span>
-                  <span className={`font-mono ${stats.defCompliance >= 90 ? 'text-status-success' : 'text-status-warning'}`}>
-                  {stats.defCompliance}%
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Definitions up to date</span>
+                  <span className="text-black dark:text-white tabular-nums">
+                  ({stats.defCompliance}%)
                 </span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Active detections</span>
-                  <span className={`font-mono ${stats.activeDetections > 0 ? 'text-status-critical' : 'text-status-success'}`}>
-                  {stats.activeDetections}
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Active detections</span>
+                  <span className="text-black dark:text-white tabular-nums">
+                  ({stats.activeDetections})
                 </span>
               </div>
             </div>
@@ -259,46 +220,27 @@ export function OverviewPage() {
         </Link>
 
         <Link href="/patch-compliance" className="block group">
-          <div className="bg-card border border-border rounded-md shadow-sm p-4 hover:border-brand/50 hover:bg-surface-hover transition-colors">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-md bg-surface-hover flex items-center justify-center">
-                  <span
-                    aria-hidden="true"
-                    className="h-5 w-5 bg-foreground"
-                    style={{
-                      maskImage: 'url(/software-patch.png)',
-                      WebkitMaskImage: 'url(/software-patch.png)',
-                      maskRepeat: 'no-repeat',
-                      WebkitMaskRepeat: 'no-repeat',
-                      maskPosition: 'center',
-                      WebkitMaskPosition: 'center',
-                      maskSize: '130%',
-                      WebkitMaskSize: '130%',
-                    }}
-                  />
-                </div>
-                <span className="text-[13px] font-semibold text-foreground">Patch Compliance</span>
-              </div>
-              <ArrowRight size={14} strokeWidth={1.5} className="text-muted-foreground group-hover:text-foreground transition-colors" />
+          <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-sm px-4 pb-4 pt-8 hover:border-brand/50 hover:bg-surface-hover transition-colors">
+            <div className="absolute left-1/2 -top-3 -translate-x-1/2 z-10 bg-card border border-border rounded-full px-5 py-1 text-center whitespace-nowrap">
+              <span className="text-[12px] font-semibold text-black dark:text-white">Patch Compliance</span>
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Fully patched</span>
-                  <span className={`font-semibold font-mono ${stats.patchCompliance >= 85 ? 'text-status-success' : 'text-status-warning'}`}>
-                  {stats.patchCompliance}%
+            <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Fully patched</span>
+                  <span className="text-black dark:text-white tabular-nums">
+                  ({stats.patchCompliance}%)
                 </span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Missing critical (fleet)</span>
-                  <span className={`font-mono ${stats.missingCriticalTotal > 0 ? 'text-status-critical' : 'text-status-success'}`}>
-                  {stats.missingCriticalTotal}
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Missing critical (fleet)</span>
+                  <span className="text-black dark:text-white tabular-nums">
+                  ({stats.missingCriticalTotal})
                 </span>
               </div>
-              <div className="flex justify-between text-[13px]">
-                <span className="text-muted-foreground">Pending reboot</span>
-                  <span className={`font-mono ${stats.pendingReboot > 2 ? 'text-status-warning' : 'text-foreground'}`}>
-                  {stats.pendingReboot}
+              <div className="flex justify-between text-[12px]">
+                <span className="text-black dark:text-white">Pending reboot</span>
+                  <span className="text-black dark:text-white tabular-nums">
+                  ({stats.pendingReboot})
                 </span>
               </div>
             </div>
@@ -323,7 +265,7 @@ export function OverviewPage() {
             {alerts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2">
                 <AlertCircle size={20} className="text-muted-foreground" strokeWidth={1.5} />
-                <p className="text-[13px] text-muted-foreground">No alerts in the selected range</p>
+                <p className="text-[12px] text-muted-foreground">No alerts in the selected range</p>
               </div>
             ) : (
               <div className="divide-y divide-border">
@@ -331,15 +273,15 @@ export function OverviewPage() {
                   <div key={alert.id} className="flex items-start gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors">
                     <StatusDot status={alert.severity} className="mt-0.5 shrink-0" />
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] text-foreground leading-snug">{alert.message}</p>
+                      <p className="text-[12px] text-foreground leading-snug">{alert.message}</p>
                       <div className="flex items-center gap-2 mt-0.5">
                         {alert.deviceName && (
-                          <span className="text-[11px] font-mono text-muted-foreground">{alert.deviceName}</span>
+                          <span className="text-[12px] font-mono text-muted-foreground">{alert.deviceName}</span>
                         )}
                         <CategoryBadge category={alert.category} size="sm" />
                       </div>
                     </div>
-                    <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+                    <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0">
                       {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
                     </span>
                   </div>
@@ -353,7 +295,7 @@ export function OverviewPage() {
             <div className="divide-y divide-border">
               {scanActivity.map((s, i) => (
                 <div key={i} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-hover transition-colors">
-                  <span className="font-mono text-[13px] text-foreground w-28 truncate shrink-0">{s.deviceName}</span>
+                  <span className="font-mono text-[12px] text-foreground w-28 truncate shrink-0">{s.deviceName}</span>
                   <div className="flex items-center gap-1.5 flex-1">
                     <span className="font-mono text-[12px]" style={{ color: getComplianceScoreColor(s.previousScore) }}>{s.previousScore}%</span>
                     {s.score > s.previousScore ? (
@@ -365,9 +307,9 @@ export function OverviewPage() {
                   </div>
                   <span className="inline-flex items-center gap-2">
                     <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: getStatusColor(s.status) }} />
-                    <span className="text-[12px] font-medium capitalize text-foreground">{s.status}</span>
+                    <span className="text-[12px] font-medium text-foreground">{s.status === 'compliant' ? 'Healthy' : s.status.charAt(0).toUpperCase() + s.status.slice(1)}</span>
                   </span>
-                  <span className="text-[11px] text-muted-foreground whitespace-nowrap shrink-0">
+                  <span className="text-[12px] text-muted-foreground whitespace-nowrap shrink-0">
                     {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })}
                   </span>
                 </div>
@@ -387,7 +329,7 @@ export function OverviewPage() {
           <SectionCard title="Top Failing Checks">
             <div className="space-y-2 pb-6">
               {topFailingChecks.length === 0 ? (
-                <p className="text-[13px] text-muted-foreground py-4 text-center">No failing checks found.</p>
+                <p className="text-[12px] text-muted-foreground py-4 text-center">No failing checks found.</p>
               ) : (
                 topFailingChecks.map(check => (
                   <div key={check.id} className="flex items-center gap-3">
@@ -403,7 +345,7 @@ export function OverviewPage() {
                           }}
                         />
                       </div>
-                      <span className="text-[11px] font-mono text-muted-foreground w-8 text-right">{check.failingDeviceCount}</span>
+                      <span className="text-[12px] font-mono text-muted-foreground w-8 text-right">{check.failingDeviceCount}</span>
                     </div>
                   </div>
                 ))
@@ -414,7 +356,7 @@ export function OverviewPage() {
           {/* Risk Heatmap */}
           <SectionCard title="Risk Heatmap" description="Departments × check category">
             <div className="overflow-x-auto pb-4">
-              <table className="w-full text-[11px]">
+              <table className="w-full text-[12px]">
                 <thead>
                   <tr>
                     <th className="text-left text-muted-foreground font-medium pb-2 pr-3">Dept</th>
@@ -431,7 +373,7 @@ export function OverviewPage() {
                       <td className="text-muted-foreground py-1 pr-3 whitespace-nowrap">{row.dept}</td>
                       {row.scores.map((score, ci) => (
                         <td key={ci} className="px-1 py-1 text-center">
-                          <span className={`inline-flex items-center justify-center w-10 h-7 rounded text-[11px] font-mono font-medium ${riskColor(score)} ${riskText(score)}`}>
+                          <span className={`inline-flex items-center justify-center w-10 h-7 rounded text-[12px] font-mono font-medium ${riskColor(score)} ${riskText(score)}`}>
                             {score > 0 ? `${score}%` : '—'}
                           </span>
                         </td>
@@ -455,7 +397,7 @@ export function OverviewPage() {
         }
         noPadding
       >
-        <table className="w-full text-[13px]">
+        <table className="w-full text-[12px]">
           <thead>
             <tr className="border-b border-border">
               {[
@@ -484,7 +426,7 @@ export function OverviewPage() {
                 <td className="px-3">
                   <span className="inline-flex items-center gap-2">
                     <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: getStatusColor(d.status) }} />
-                    <span className="text-[12px] font-medium capitalize text-foreground">{d.status}</span>
+                    <span className="text-[12px] font-medium text-foreground">{d.status === 'compliant' ? 'Healthy' : d.status.charAt(0).toUpperCase() + d.status.slice(1)}</span>
                   </span>
                 </td>
                 <td className="px-3">
