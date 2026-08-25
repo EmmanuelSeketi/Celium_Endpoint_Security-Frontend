@@ -45,11 +45,11 @@ function lastSeenSeverity(dateStr: string): Severity {
   return 'critical'
 }
 
-function StatusIndicator({ status, className }: { status: DeviceStatus; className?: string }) {
+function StatusIndicator({ status, className, showDot = true }: { status: DeviceStatus; className?: string; showDot?: boolean }) {
   const s = SEVERITY[status as Severity]
   return (
     <span className={cn('inline-flex items-center gap-2', className)}>
-      <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: s.dot }} />
+      {showDot && <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: s.dot }} />}
       <span className="text-[12px] font-medium capitalize" style={{ color: SEVERITY_TEXT }}>
         {s.label}
       </span>
@@ -238,10 +238,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
             <div className="space-y-3">
               <div className="bg-surface border border-border rounded-md divide-y divide-border">
                 {[
-                  { label: 'Missing Critical', value: device.patchStatus.missingCritical, color: device.patchStatus.missingCritical > 0 ? '#F04438' : '#008080' },
+                  { label: 'Missing Critical', value: device.patchStatus.missingCritical, color: device.patchStatus.missingCritical > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant },
                   { label: 'Missing Total', value: device.patchStatus.missingTotal },
-                  { label: 'Pending Reboot', value: device.patchStatus.pendingReboot ? 'Yes' : 'No', color: device.patchStatus.pendingReboot ? '#F79009' : undefined },
-                  { label: 'OS End-of-Life', value: device.patchStatus.osEol ? `Yes — EOL: ${device.patchStatus.eolDate ?? '—'}` : 'No', color: device.patchStatus.osEol ? '#F04438' : '#008080' },
+                  { label: 'Pending Reboot', value: device.patchStatus.pendingReboot ? 'Yes' : 'No', color: device.patchStatus.pendingReboot ? STATUS_COLORS.warning : undefined },
+                  { label: 'OS End-of-Life', value: device.patchStatus.osEol ? `Yes — EOL: ${device.patchStatus.eolDate ?? '—'}` : 'No', color: device.patchStatus.osEol ? STATUS_COLORS.critical : STATUS_COLORS.compliant },
                   { label: 'Last Update Check', value: format(new Date(device.patchStatus.lastUpdateCheck), 'MMM d, yyyy HH:mm') },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
@@ -470,7 +470,7 @@ export function DevicesPage() {
                     )}
                     onClick={() => setSelectedDevice(d)}
                   >
-                    <td className="px-3"><StatusIndicator status={d.status} /></td>
+                    <td className="px-3"><StatusIndicator status={d.status} showDot={false} /></td>
                     <td className="px-3">
                       <span className="font-mono text-[12px] text-foreground">{d.name}</span>
                     </td>
@@ -484,7 +484,12 @@ export function DevicesPage() {
                     <td className="px-3 text-muted-foreground">{d.username}</td>
                     <td className="px-3 text-muted-foreground">{d.department}</td>
                     <td className="px-3">
-                      <ScoreBar score={d.complianceScore} severity={d.status as Severity} />
+                      <span
+                        className="text-[14px] font-semibold leading-none tabular-nums"
+                        style={{ color: SEVERITY[d.status as Severity].dot, fontVariantNumeric: 'tabular-nums' }}
+                      >
+                        {d.complianceScore}%
+                      </span>
                     </td>
                     <td className="px-3 text-right">
                       <span className="font-mono text-[12px] font-semibold" style={{ color: SEVERITY[d.status as Severity].dot }}>{d.failedChecks}</span>

@@ -2,6 +2,7 @@ import { cn } from '@/lib/utils'
 
 interface SectionCardProps {
   title?: string
+  titleClassName?: string
   description?: string
   action?: React.ReactNode
   children: React.ReactNode
@@ -12,6 +13,7 @@ interface SectionCardProps {
 
 export function SectionCard({
   title,
+  titleClassName,
   description,
   action,
   children,
@@ -25,7 +27,7 @@ export function SectionCard({
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div>
             {title && (
-              <h2 className="text-[13px] font-semibold text-foreground uppercase tracking-wider">
+              <h2 className={cn('text-[13px] font-semibold text-foreground uppercase tracking-wider', titleClassName)}>
                 {title}
               </h2>
             )}

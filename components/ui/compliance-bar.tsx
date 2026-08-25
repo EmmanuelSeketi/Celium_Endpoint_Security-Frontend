@@ -65,32 +65,32 @@ export function StackedFleetBar({
       <div className="flex rounded-full overflow-hidden gap-px" style={{ height }}>
         <div
           className="transition-all"
-          style={{ width: `${compPct}%`, backgroundColor: '#008080' }}
+          style={{ width: `${compPct}%`, backgroundColor: STATUS_COLORS.compliant }}
           title={`Healthy: ${compliant}`}
         />
         <div
           className="transition-all"
-          style={{ width: `${warnPct}%`, backgroundColor: '#F79009' }}
+          style={{ width: `${warnPct}%`, backgroundColor: STATUS_COLORS.warning }}
           title={`Warning: ${warning}`}
         />
         <div
           className="transition-all"
-          style={{ width: `${critPct}%`, backgroundColor: '#F04438' }}
+          style={{ width: `${critPct}%`, backgroundColor: STATUS_COLORS.critical }}
           title={`Critical: ${critical}`}
         />
       </div>
       {showLegend && (
         <div className="flex items-center gap-4 text-[12px]">
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-[#008080]" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS.compliant }} />
             Healthy <span className="font-mono text-foreground">{compliant}</span>
           </span>
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-[#F79009]" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS.warning }} />
             Warning <span className="font-mono text-foreground">{warning}</span>
           </span>
           <span className="flex items-center gap-1.5 text-muted-foreground">
-            <span className="w-2 h-2 rounded-full bg-[#F04438]" />
+            <span className="w-2 h-2 rounded-full" style={{ backgroundColor: STATUS_COLORS.critical }} />
             Critical <span className="font-mono text-foreground">{critical}</span>
           </span>
         </div>

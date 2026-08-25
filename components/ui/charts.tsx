@@ -1,5 +1,6 @@
 'use client'
 
+import dynamic from 'next/dynamic'
 import {
   LineChart,
   Line,
@@ -14,7 +15,12 @@ import {
   ReferenceDot,
   Legend,
 } from 'recharts'
-import { CHART_GRID, BRAND, STATUS_COLORS, CATEGORY_COLORS } from '@/lib/theme'
+import type { ApexOptions } from 'apexcharts'
+import type { DefaultizedPieValueType } from '@mui/x-charts/models'
+import { PieChart as MuiPieChart, pieClasses } from '@mui/x-charts/PieChart'
+import { CHART_GRID, BRAND, STATUS_COLORS } from '@/lib/theme'
+
+const ReactApexChart = dynamic(() => import('react-apexcharts'), { ssr: false })
 
 // ─── Custom Tooltip ───────────────────────────────────────────────────────────
 type TooltipEntry = { name?: string; value?: number; color?: string }
@@ -41,6 +47,12 @@ const AXIS_STYLE = {
   fill: '#9AA3AF',
   fontSize: 11,
   fontFamily: 'var(--font-sans)',
+}
+
+const OS_AXIS_STYLE = {
+  ...AXIS_STYLE,
+  fill: 'var(--foreground)',
+  fontWeight: 500,
 }
 
 // ─── Compliance Line Chart ────────────────────────────────────────────────────
@@ -136,7 +148,7 @@ interface OSComplianceBarChartProps {
 export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChartProps) {
   const osColors: Record<string, string> = {
     Windows: '#0078D4',
-    macOS: '#E85D9E',
+    macOS: '#f35865',
     Linux: '#F59E0B',
   }
 
@@ -175,7 +187,7 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
         <g transform={`translate(${-(iconSize + gap + 18)}, -5)`}>
           {icon}
         </g>
-        <text x={iconSize + gap - 18} y={0} dy="0.71em" textAnchor="start" {...AXIS_STYLE}>
+        <text x={iconSize + gap - 18} y={0} dy="0.71em" textAnchor="start" {...OS_AXIS_STYLE}>
           {payload.value}
         </text>
       </g>
@@ -187,7 +199,7 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
       <BarChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
         <CartesianGrid stroke={CHART_GRID} strokeDasharray="3 3" vertical={false} />
         <XAxis dataKey="os" tick={<CustomAxisTick />} axisLine={false} tickLine={false} />
-        <YAxis tick={AXIS_STYLE} axisLine={false} tickLine={false} domain={[0, 100]} />
+        <YAxis tick={OS_AXIS_STYLE} axisLine={false} tickLine={false} domain={[0, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-hover)', stroke: CHART_GRID, strokeWidth: 1 }} />
         <Bar dataKey="score" name="Avg Score %" radius={[4, 4, 0, 0]}>
           {data.map((entry) => (
@@ -196,6 +208,188 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
         </Bar>
       </BarChart>
     </ResponsiveContainer>
+  )
+}
+
+// ─── Top Failing Checks Pie Chart ────────────────────────────────────────────
+interface ChartDataItem {
+  name: string
+  value: number
+  color: string
+}
+
+interface FailingChecksPieChartProps {
+  data: Array<{ name: string; value: number }>
+  height?: number
+  showArcLabels?: boolean
+  colors?: string[]
+  showTotal?: boolean
+  totalOverride?: number
+}
+
+export function FailingChecksPieChart({ data, height = 180, showArcLabels = true, colors, showTotal = false, totalOverride }: FailingChecksPieChartProps) {
+  const defaultColors = ['#495afb', '#fcc658', '#f35865', '#30c8ff', '#44ce8d']
+  const pieColors = colors ?? defaultColors
+  const chartData: ChartDataItem[] = data.map((item, index) => ({
+    name: item.name,
+    value: item.value,
+    color: pieColors[index % pieColors.length],
+  }))
+  const total = chartData.reduce((sum, entry) => sum + entry.value, 0)
+  const getArcLabel = (params: DefaultizedPieValueType) => {
+    const percent = params.value / total
+    return `${(percent * 100).toFixed(0)}%`
+  }
+  const chartSize = height <= 120 ? height : 160
+  const chartCenter = chartSize / 2
+  const pieSizing = {
+    margin: { right: 0 },
+    width: chartSize,
+    height: chartSize,
+    hideLegend: true,
+  }
+
+  const series = {
+    innerRadius: height <= 120 ? 27 : 27,
+    outerRadius: height <= 120 ? 45 : 77,
+    paddingAngle: height <= 120 ? 3 : 5,
+    cornerRadius: height <= 120 ? 8 : 10,
+    startAngle: -276,
+    endAngle: 255,
+    cx: chartCenter,
+    cy: chartCenter,
+  }
+
+  return (
+    <div className="flex items-center gap-3" style={{ height }}>
+      <div className="relative w-[48%] shrink-0 flex justify-center overflow-hidden">
+        <MuiPieChart
+          series={[{
+            ...series,
+            data: chartData.map(entry => ({ label: entry.name, value: entry.value, color: entry.color })),
+            arcLabel: showArcLabels ? getArcLabel : undefined,
+          }]}
+          sx={{
+            [`& .${pieClasses.arcLabel}`]: {
+              fill: 'white',
+              fontSize: 14,
+            },
+          }}
+          {...pieSizing}
+        />
+        {showTotal && (
+          <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[18px] font-semibold leading-none tabular-nums text-black dark:text-white">
+            {totalOverride ?? total}
+          </span>
+        )}
+      </div>
+      <div className="min-w-0 flex-1 space-y-2">
+        {chartData.map(entry => (
+          <div key={entry.name} className="flex items-start gap-2 min-w-0">
+            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
+            <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-black dark:text-white" title={entry.name}>
+              {entry.name}
+            </span>
+            <span className="shrink-0 font-mono text-[12px] font-medium text-black dark:text-white">{entry.value}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+interface RiskHeatmapProps {
+  categories: string[]
+  departments: string[]
+  values: number[][]
+  height?: number
+}
+
+export function RiskHeatmap({ categories, departments, values, height = 300 }: RiskHeatmapProps) {
+  const series = departments.map((department, rowIndex) => ({
+    name: department,
+    data: categories.map((category, columnIndex) => ({
+      x: category,
+      y: values[rowIndex]?.[columnIndex] === 0 ? 0.01 : values[rowIndex]?.[columnIndex] ?? 0,
+    })),
+  }))
+  const options: ApexOptions = {
+    chart: {
+      type: 'heatmap',
+      height,
+      toolbar: { show: false },
+    },
+    dataLabels: {
+      enabled: true,
+      formatter: (_value, options) => {
+        const seriesIndex = options?.seriesIndex ?? 0
+        const dataPointIndex = options?.dataPointIndex ?? 0
+        const value = values[seriesIndex]?.[dataPointIndex] ?? 0
+        return `${value}%`
+      },
+      style: {
+        fontFamily: 'var(--font-sans)',
+        fontSize: '12px',
+        fontWeight: 500,
+        colors: ['#ffffff'],
+      },
+    },
+    plotOptions: {
+      heatmap: {
+        radius: 2,
+        shadeIntensity: 0,
+        colorScale: {
+          ranges: [
+            { from: 0, to: 30, color: STATUS_COLORS.compliant, name: 'Low' },
+            { from: 31, to: 60, color: STATUS_COLORS.warning, name: 'Medium' },
+            { from: 61, to: 100, color: STATUS_COLORS.critical, name: 'High' },
+          ],
+        },
+      },
+    },
+    grid: { padding: { left: 8, right: 8, top: 0, bottom: 0 } },
+    legend: {
+      position: 'top',
+      horizontalAlign: 'center',
+      floating: false,
+      offsetY: 0,
+      fontSize: '11px',
+      fontWeight: 500,
+      itemMargin: { horizontal: 8, vertical: 0 },
+      labels: {
+        colors: 'var(--foreground)',
+        useSeriesColors: false,
+      },
+      markers: {
+        size: 8,
+      },
+    },
+    xaxis: {
+      labels: {
+        style: {
+          colors: 'var(--foreground)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '12px',
+          fontWeight: 500,
+        },
+      },
+    },
+    yaxis: {
+      labels: {
+        style: {
+          colors: 'var(--foreground)',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '12px',
+          fontWeight: 500,
+        },
+      },
+    },
+  }
+
+  return (
+    <div className="mx-auto mt-0 mb-0 w-full max-w-[650px] overflow-x-auto" id="chart">
+      <ReactApexChart options={options} series={series} type="heatmap" height={height} />
+    </div>
   )
 }
 

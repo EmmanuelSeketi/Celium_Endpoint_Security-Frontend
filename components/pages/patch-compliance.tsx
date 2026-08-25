@@ -8,7 +8,7 @@ import { SectionCard } from '@/components/ui/section-card'
 import { ComplianceBar } from '@/components/ui/compliance-bar'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
-import { CHART_GRID } from '@/lib/theme'
+import { CHART_GRID, STATUS_COLORS } from '@/lib/theme'
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; payload: { fill: string } }[]; label?: string }) {
   if (!active || !payload?.length) return null
@@ -56,25 +56,25 @@ export function PatchCompliancePage() {
             label: 'Patch Compliance',
             value: `${stats.patchCompliance}%`,
             description: `${stats.total - fullyPatched} devices have missing patches`,
-            color: stats.patchCompliance >= 85 ? '#008080' : stats.patchCompliance >= 70 ? '#F79009' : '#F04438',
+            color: stats.patchCompliance >= 85 ? STATUS_COLORS.compliant : stats.patchCompliance >= 70 ? STATUS_COLORS.warning : STATUS_COLORS.critical,
           },
           {
             label: 'Critical Missing',
             value: criticalPatches.reduce((s, p) => s + p.affectedDevices, 0),
             description: `Across ${criticalPatches.length} critical patch${criticalPatches.length !== 1 ? 'es' : ''}`,
-            color: criticalPatches.length > 0 ? '#F04438' : '#008080',
+            color: criticalPatches.length > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant,
           },
           {
             label: 'Pending Reboot',
             value: pendingReboot,
             description: 'Awaiting restart to apply patches',
-            color: pendingReboot > 0 ? '#F79009' : '#008080',
+            color: pendingReboot > 0 ? STATUS_COLORS.warning : STATUS_COLORS.compliant,
           },
           {
             label: 'EOL Devices',
             value: eolDevices.length,
             description: 'Operating systems past end-of-life',
-            color: eolDevices.length > 0 ? '#F04438' : '#008080',
+            color: eolDevices.length > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant,
           },
         ].map(({ label, value, description, color }) => (
           <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">

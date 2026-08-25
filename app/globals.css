@@ -98,9 +98,9 @@
   --surface-elevated: #F4F6F9;
   --surface-hover: #EEF1F5;
 
-  --status-critical: #DC2626;
-  --status-warning: #D97706;
-  --status-success: #008080;
+  --status-critical: #f35865;
+  --status-warning: #ffc758;
+  --status-success: #495afb;
   --status-info: #2563EB;
   --status-unknown: #6B7280;
 
@@ -155,9 +155,9 @@
   --surface-elevated: #181D25;
   --surface-hover: #1B212A;
 
-  --status-critical: #F04438;
-  --status-warning: #F79009;
-  --status-success: #008080;
+  --status-critical: #f35865;
+  --status-warning: #ffc758;
+  --status-success: #495afb;
   --status-info: #3B82F6;
   --status-unknown: #6B7280;
 

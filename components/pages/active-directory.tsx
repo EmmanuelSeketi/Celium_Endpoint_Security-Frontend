@@ -8,6 +8,7 @@ import { SectionCard } from '@/components/ui/section-card'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { cn } from '@/lib/utils'
+import { STATUS_COLORS } from '@/lib/theme'
 
 const ANOMALY_LABELS = {
   kerberoasting: 'Kerberoasting',
@@ -55,7 +56,7 @@ export function ActiveDirectoryPage() {
           label="Domain Controllers"
           value={`${domainControllers.filter(d => d.online).length}/${domainControllers.length}`}
           description={allDcsHealthy ? 'All controllers healthy' : 'Replication issue detected'}
-          accentColor={allDcsHealthy ? '#008080' : '#F04438'}
+          accentColor={allDcsHealthy ? STATUS_COLORS.compliant : STATUS_COLORS.critical}
           trend={allDcsHealthy ? 'up' : 'down'}
           trendGood={true}
         />
@@ -63,7 +64,7 @@ export function ActiveDirectoryPage() {
           label="Failed Logons (24h)"
           value={failedLogons24h}
           description={`${failRate}% failure rate`}
-          accentColor={failedLogons24h > 40 ? '#F79009' : '#008080'}
+          accentColor={failedLogons24h > 40 ? STATUS_COLORS.warning : STATUS_COLORS.compliant}
           trend={failedLogons24h > 40 ? 'up' : 'flat'}
           trendGood={false}
         />
@@ -71,7 +72,7 @@ export function ActiveDirectoryPage() {
           label="Kerberos Anomalies"
           value={kerberosAnomalies.length}
           description="Suspicious Kerberos events"
-          accentColor={kerberosAnomalies.length > 0 ? '#F04438' : '#008080'}
+          accentColor={kerberosAnomalies.length > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant}
           trend={kerberosAnomalies.length > 0 ? 'up' : 'flat'}
           trendGood={false}
         />
@@ -79,7 +80,7 @@ export function ActiveDirectoryPage() {
           label="Stale Accounts"
           value={staleAccounts}
           description="Inactive for 90+ days"
-          accentColor={staleAccounts > 5 ? '#F79009' : '#008080'}
+          accentColor={staleAccounts > 5 ? STATUS_COLORS.warning : STATUS_COLORS.compliant}
           trend={staleAccounts > 5 ? 'up' : 'flat'}
           trendGood={false}
         />

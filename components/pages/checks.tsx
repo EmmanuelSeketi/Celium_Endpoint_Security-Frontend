@@ -8,6 +8,7 @@ import { SectionCard } from '@/components/ui/section-card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import type { ComplianceCheck, Severity, CheckCategory } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { STATUS_COLORS } from '@/lib/theme'
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'warning', 'info']
 const CATEGORY_LABELS: Record<CheckCategory, string> = {
@@ -48,7 +49,7 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
           <div className="flex items-center gap-3 bg-surface border border-border rounded-md p-4">
             <div
               className="text-[30px] font-semibold leading-none tabular-nums"
-              style={{ color: check.severity === 'critical' ? '#F04438' : check.severity === 'warning' ? '#F79009' : '#008080' }}
+              style={{ color: check.severity === 'critical' ? STATUS_COLORS.critical : check.severity === 'warning' ? STATUS_COLORS.warning : STATUS_COLORS.compliant }}
             >
               {check.failingDeviceCount}
             </div>
@@ -113,8 +114,8 @@ export function ChecksPage() {
         <div className="grid grid-cols-3 gap-3">
           {[
             { label: 'Total Checks', value: complianceChecks.length, color: undefined },
-            { label: 'Critical Checks', value: criticalCount, color: '#F04438' },
-            { label: 'Warning Checks', value: warningCount, color: '#F79009' },
+            { label: 'Critical Checks', value: criticalCount, color: STATUS_COLORS.critical },
+            { label: 'Warning Checks', value: warningCount, color: STATUS_COLORS.warning },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">{label}</p>
