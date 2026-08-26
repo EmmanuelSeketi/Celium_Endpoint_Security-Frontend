@@ -350,7 +350,7 @@ export function OverviewPage() {
       <SectionCard
         title="Devices"
         action={
-          <Link href="/devices" className="text-[12px] text-brand hover:text-brand/80 flex items-center gap-1 transition-colors">
+          <Link href="/devices" className="text-[12px] text-black dark:text-white hover:text-black/80 dark:hover:text-white/80 flex items-center gap-1 transition-colors">
             View all devices <ArrowRight size={11} strokeWidth={2} />
           </Link>
         }
