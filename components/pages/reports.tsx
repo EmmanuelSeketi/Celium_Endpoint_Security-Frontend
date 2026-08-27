@@ -154,7 +154,7 @@ export function ReportsPage() {
               <div key={type} className="bg-card border border-border rounded-md shadow-sm p-4">
                 <div className="flex items-center gap-2 mb-2">
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: TYPE_COLORS[type] }} />
-                  <span className="text-[11px] text-foreground font-semibold uppercase tracking-wider">{type}</span>
+                  <span className="text-[13px] text-foreground font-semibold uppercase tracking-wider">{type}</span>
                 </div>
                 <p className="text-[30px] font-semibold leading-none tabular-nums text-foreground">{count}</p>
               </div>

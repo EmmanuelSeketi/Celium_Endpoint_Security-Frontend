@@ -5,6 +5,25 @@
 @custom-variant dark (&:is(.dark *));
 @custom-variant light (&:is(.light *));
 
+:root {
+  --status-good: #16A34A;
+  --status-good-bg: #F0FDF4;
+  --status-warning: #D97706;
+  --status-warning-bg: #FFFBEB;
+  --status-critical: #DC2626;
+  --status-critical-bg: #FEF2F2;
+  --accent-semantic: #2563EB;
+  --category-1: #2563EB;
+  --category-2: #7C3AED;
+  --category-3: #64748B;
+  --bg-page: #F8FAFC;
+  --bg-card: #FFFFFF;
+  --border-subtle: #E2E8F0;
+  --text-primary: #0F172A;
+  --text-muted: #64748B;
+  --shadow-card: 0 1px 2px rgba(15,23,42,0.04), 0 1px 3px rgba(15,23,42,0.06);
+}
+
 @theme inline {
   --font-sans: 'Inter', BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   --font-mono: 'JetBrains Mono', 'JetBrains Mono Fallback', ui-monospace, monospace;
@@ -34,6 +53,10 @@
   /* Status semantic colors */
   --color-status-critical: var(--status-critical);
   --color-status-warning: var(--status-warning);
+  --color-status-good: var(--status-good);
+  --color-status-goodBg: var(--status-good-bg);
+  --color-status-warningBg: var(--status-warning-bg);
+  --color-status-criticalBg: var(--status-critical-bg);
   --color-status-success: var(--status-success);
   --color-status-info: var(--status-info);
   --color-status-unknown: var(--status-unknown);
@@ -98,9 +121,7 @@
   --surface-elevated: #F4F6F9;
   --surface-hover: #EEF1F5;
 
-  --status-critical: #f35865;
-  --status-warning: #ffc758;
-  --status-success: #495afb;
+  --status-success: var(--status-good);
   --status-info: #2563EB;
   --status-unknown: #6B7280;
 
@@ -155,9 +176,9 @@
   --surface-elevated: #181D25;
   --surface-hover: #1B212A;
 
-  --status-critical: #f35865;
-  --status-warning: #ffc758;
-  --status-success: #495afb;
+  --status-critical: #F87171;
+  --status-warning: #FBBF24;
+  --status-success: #4ADE80;
   --status-info: #3B82F6;
   --status-unknown: #6B7280;
 

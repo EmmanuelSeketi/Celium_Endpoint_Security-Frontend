@@ -147,9 +147,9 @@ interface OSComplianceBarChartProps {
 
 export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChartProps) {
   const osColors: Record<string, string> = {
-    Windows: '#0078D4',
-    macOS: '#f35865',
-    Linux: '#F59E0B',
+    Windows: 'var(--category-1)',
+    macOS: 'var(--category-2)',
+    Linux: 'var(--category-3)',
   }
 
   function CustomAxisTick(props: any) {
@@ -162,10 +162,10 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
     if (os === 'Windows') {
       icon = (
         <svg viewBox="0 0 24 24" width={iconSize} height={iconSize}>
-          <rect x="3" y="3" width="8" height="8" rx="1" fill="#0078D4"/>
-          <rect x="13" y="3" width="8" height="8" rx="1" fill="#0078D4"/>
-          <rect x="3" y="13" width="8" height="8" rx="1" fill="#0078D4"/>
-          <rect x="13" y="13" width="8" height="8" rx="1" fill="#0078D4"/>
+          <rect x="3" y="3" width="8" height="8" rx="1" fill="var(--text-muted)"/>
+          <rect x="13" y="3" width="8" height="8" rx="1" fill="var(--text-muted)"/>
+          <rect x="3" y="13" width="8" height="8" rx="1" fill="var(--text-muted)"/>
+          <rect x="13" y="13" width="8" height="8" rx="1" fill="var(--text-muted)"/>
         </svg>
       )
     } else if (os === 'macOS') {
@@ -228,9 +228,9 @@ interface FailingChecksPieChartProps {
 }
 
 export function FailingChecksPieChart({ data, height = 180, showArcLabels = true, colors, showTotal = false, totalOverride }: FailingChecksPieChartProps) {
-  const defaultColors = ['#495afb', '#fcc658', '#f35865', '#30c8ff', '#44ce8d']
+  const defaultColors = [STATUS_COLORS.critical, STATUS_COLORS.warning, 'var(--category-1)', 'var(--category-2)', 'var(--category-3)']
   const pieColors = colors ?? defaultColors
-  const chartData: ChartDataItem[] = data.map((item, index) => ({
+  const chartData: ChartDataItem[] = [...data].sort((a, b) => b.value - a.value).map((item, index) => ({
     name: item.name,
     value: item.value,
     color: pieColors[index % pieColors.length],
@@ -336,18 +336,18 @@ export function RiskHeatmap({ categories, departments, values, height = 300 }: R
     },
     plotOptions: {
       heatmap: {
-        radius: 2,
+        radius: 4,
         shadeIntensity: 0,
         colorScale: {
           ranges: [
-            { from: 0, to: 30, color: STATUS_COLORS.compliant, name: 'Low' },
-            { from: 31, to: 60, color: STATUS_COLORS.warning, name: 'Medium' },
-            { from: 61, to: 100, color: STATUS_COLORS.critical, name: 'High' },
+            { from: 0, to: 4, color: '#2563EB', name: 'Healthy' },
+            { from: 5, to: 14, color: '#D97706', name: 'Warning' },
+            { from: 15, to: 100, color: '#DC2626', name: 'Critical' },
           ],
         },
       },
     },
-    grid: { padding: { left: 8, right: 8, top: 0, bottom: 0 } },
+    grid: { padding: { left: 4, right: 8, top: 0, bottom: 0 } },
     legend: {
       position: 'top',
       horizontalAlign: 'center',
@@ -376,6 +376,9 @@ export function RiskHeatmap({ categories, departments, values, height = 300 }: R
     },
     yaxis: {
       labels: {
+        align: 'left',
+        minWidth: 88,
+        maxWidth: 88,
         style: {
           colors: 'var(--foreground)',
           fontFamily: 'var(--font-sans)',
@@ -387,8 +390,8 @@ export function RiskHeatmap({ categories, departments, values, height = 300 }: R
   }
 
   return (
-    <div className="mx-auto mt-0 mb-0 w-full max-w-[650px] overflow-x-auto" id="chart">
-      <ReactApexChart options={options} series={series} type="heatmap" height={height} />
+    <div className="mt-0 mb-0 w-full overflow-x-auto" id="chart">
+      <ReactApexChart options={options} series={series} type="heatmap" height={height} width="100%" />
     </div>
   )
 }

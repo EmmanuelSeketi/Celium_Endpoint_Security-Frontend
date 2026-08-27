@@ -2,11 +2,11 @@
 
 import { useState, useMemo } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Search, X, ChevronDown, ChevronRight, ArrowUpDown, Plus, Laptop } from 'lucide-react'
+import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Plus, Laptop } from 'lucide-react'
+import { Gauge } from '@mui/x-charts/Gauge'
 import { devices as allDevices } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
-import { ScoreBar, LastSeenIndicator } from '@/components/ui/compliance-bar'
 import { getDefinitionAgeColor, STATUS_COLORS } from '@/lib/theme'
 import type { Device, OS, DeviceStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils'
 const OS_OPTIONS: OS[] = ['Windows', 'Mac', 'Linux']
 const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
 const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
+const PAGE_SIZE = 10
 
 // --- Shared severity system -------------------------------------------------
 // One palette, applied identically to Status, Score, Checks, and Last Seen,
@@ -22,7 +23,7 @@ const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
 type Severity = 'compliant' | 'warning' | 'critical'
 
 const SEVERITY: Record<Severity, { dot: string; label: string }> = {
-  compliant: { dot: STATUS_COLORS.compliant, label: 'Healthy' },
+  compliant: { dot: 'var(--category-1)', label: 'Healthy' },
   warning: { dot: STATUS_COLORS.warning, label: 'Warning' },
   critical: { dot: STATUS_COLORS.critical, label: 'Critical' },
 }
@@ -30,8 +31,6 @@ const SEVERITY: Record<Severity, { dot: string; label: string }> = {
 // Status text stays neutral in every state — only the dot carries color.
 // This is what keeps the indicator restrained instead of reading as a
 // bright, candy-colored badge.
-const SEVERITY_TEXT = '#334155'
-
 function scoreToSeverity(score: number): Severity {
   if (score >= 85) return 'compliant'
   if (score >= 65) return 'warning'
@@ -50,18 +49,9 @@ function StatusIndicator({ status, className, showDot = true }: { status: Device
   return (
     <span className={cn('inline-flex items-center gap-2', className)}>
       {showDot && <span className="w-[7px] h-[7px] rounded-full shrink-0" style={{ backgroundColor: s.dot }} />}
-      <span className="text-[12px] font-medium capitalize" style={{ color: SEVERITY_TEXT }}>
+      <span className="text-[12px] font-medium capitalize text-black dark:text-white">
         {s.label}
       </span>
-    </span>
-  )
-}
-
-function SortableHeader({ label, align = 'left' }: { label: string; align?: 'left' | 'right' }) {
-  return (
-    <span className={cn('inline-flex items-center gap-1 group cursor-pointer', align === 'right' && 'flex-row-reverse')}>
-      {label}
-      <ArrowUpDown size={10} strokeWidth={2} className="text-muted-foreground/50 group-hover:text-muted-foreground transition-colors" />
     </span>
   )
 }
@@ -69,11 +59,11 @@ function SortableHeader({ label, align = 'left' }: { label: string; align?: 'lef
 function OSIcon({ os, className }: { os: OS; className?: string }) {
   if (os === 'Windows') {
     return (
-      <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none" stroke="#0078D4" strokeWidth="1.5">
-        <rect x="3" y="3" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
-        <rect x="13" y="3" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
-        <rect x="3" y="13" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
-        <rect x="13" y="13" width="8" height="8" rx="1" fill="#0078D4" stroke="#0078D4"/>
+      <svg viewBox="0 0 24 24" width="16" height="16" className={className} fill="none">
+        <rect x="3" y="3" width="8" height="8" rx="1" fill="#F25022"/>
+        <rect x="13" y="3" width="8" height="8" rx="1" fill="#7FBA00"/>
+        <rect x="3" y="13" width="8" height="8" rx="1" fill="#00A4EF"/>
+        <rect x="13" y="13" width="8" height="8" rx="1" fill="#FFB900"/>
       </svg>
     )
   }
@@ -118,16 +108,16 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
         <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-card">
           <div>
             <div className="flex items-center gap-2 mb-1">
-              <Laptop size={15} strokeWidth={1.5} className="text-muted-foreground" />
-              <span className="font-mono text-[15px] font-semibold text-foreground">{device.name}</span>
+              <Laptop size={15} strokeWidth={1.5} className="text-black dark:text-white" />
+              <span className="font-mono text-[15px] font-semibold text-black dark:text-white">{device.name}</span>
               <StatusIndicator status={device.status} />
             </div>
-            <div className="flex items-center gap-3 text-[11px] font-mono text-muted-foreground">
+            <div className="flex items-center gap-3 text-[11px] font-mono text-black dark:text-white">
               <span>{device.osVersion}</span>
               <span>{device.ip}</span>
             </div>
           </div>
-          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground transition-colors mt-0.5">
+          <button onClick={onClose} className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-black dark:text-white transition-colors mt-0.5">
             <X size={14} strokeWidth={2} />
           </button>
         </div>
@@ -148,7 +138,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                 'px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors -mb-px',
                 tab === id
                   ? 'border-brand text-brand'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
+                  : 'border-transparent text-black dark:text-white hover:text-black dark:hover:text-white'
               )}
             >
               {label}
@@ -161,18 +151,34 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
             <div className="space-y-4">
               {/* Score Ring */}
               <div className="flex items-center gap-4 bg-surface border border-border rounded-md p-4">
-                <div
-                  className="w-16 h-16 rounded-full flex items-center justify-center font-mono text-[20px] font-semibold border-4"
-                  style={{
-                    borderColor: SEVERITY[device.status as Severity].dot,
-                    color: SEVERITY[device.status as Severity].dot,
+                <Gauge
+                  width={72}
+                  height={72}
+                  value={device.complianceScore}
+                  valueMin={0}
+                  valueMax={100}
+                  startAngle={0}
+                  endAngle={360}
+                  innerRadius="72%"
+                  outerRadius="100%"
+                  sx={{
+                    [`& .MuiGauge-valueArc`]: {
+                      fill: SEVERITY[device.status as Severity].dot,
+                    },
+                    [`& .MuiGauge-referenceArc`]: {
+                      fill: 'var(--border)',
+                    },
+                    [`& .MuiGauge-valueText`]: {
+                      fill: SEVERITY[device.status as Severity].dot,
+                      fontSize: 18,
+                      fontFamily: 'monospace',
+                      fontWeight: 600,
+                    },
                   }}
-                >
-                  {device.complianceScore}
-                </div>
+                />
                 <div>
-                  <p className="text-[13px] font-semibold text-foreground">Compliance Score</p>
-                  <p className="text-[12px] text-muted-foreground mt-0.5">
+                  <p className="text-[13px] font-semibold text-black dark:text-white">Compliance Score</p>
+                    <p className="text-[12px] text-black dark:text-white mt-0.5">
                     {device.failedChecks} failed · {device.passedChecks} passed
                   </p>
                 </div>
@@ -188,8 +194,8 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                   { label: 'MAC Address', value: device.mac, mono: true },
                 ].map(item => (
                   <div key={item.label} className="bg-surface border border-border rounded-md p-3">
-                    <p className="text-[11px] uppercase tracking-wider text-foreground font-medium">{item.label}</p>
-                    <p className={cn('text-[13px] text-foreground mt-1', item.mono && 'font-mono')}>{item.value}</p>
+                    <p className="text-[11px] uppercase tracking-wider text-black dark:text-white font-medium">{item.label}</p>
+                    <p className={cn('text-[13px] text-black dark:text-white mt-1', item.mono && 'font-mono')}>{item.value}</p>
                   </div>
                 ))}
               </div>
@@ -209,23 +215,23 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                   {
                     label: 'Real-time Protection',
                     value: device.malwareStatus.realtimeProtection ? 'Enabled' : 'Disabled',
-                    color: device.malwareStatus.realtimeProtection ? '#008080' : '#F04438',
+                    color: device.malwareStatus.realtimeProtection ? 'var(--category-1)' : '#F04438',
                   },
                   {
                     label: 'Tamper Protection',
                     value: device.malwareStatus.tamperProtection ? 'Enabled' : 'Disabled',
-                    color: device.malwareStatus.tamperProtection ? '#008080' : '#F04438',
+                    color: device.malwareStatus.tamperProtection ? 'var(--category-1)' : '#F04438',
                   },
                   {
                     label: 'Last Scan Result',
                     value: device.malwareStatus.lastScanResult.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-                    color: device.malwareStatus.lastScanResult === 'clean' ? '#008080' : '#F04438',
+                    color: device.malwareStatus.lastScanResult === 'clean' ? 'var(--category-1)' : '#F04438',
                   },
                   { label: 'Quarantine Count', value: String(device.malwareStatus.quarantineCount), mono: true },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
-                    <span className="text-[12px] text-muted-foreground">{item.label}</span>
-                    <span className={cn('text-[12px] text-foreground', item.mono && 'font-mono')} style={item.color ? { color: item.color } : undefined}>
+                    <span className="text-[12px] text-black dark:text-white">{item.label}</span>
+                    <span className={cn('text-[12px] text-black dark:text-white', item.mono && 'font-mono')} style={item.color ? { color: item.color } : undefined}>
                       {item.value}
                     </span>
                   </div>
@@ -238,14 +244,14 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
             <div className="space-y-3">
               <div className="bg-surface border border-border rounded-md divide-y divide-border">
                 {[
-                  { label: 'Missing Critical', value: device.patchStatus.missingCritical, color: device.patchStatus.missingCritical > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant },
+                  { label: 'Missing Critical', value: device.patchStatus.missingCritical, color: device.patchStatus.missingCritical > 0 ? STATUS_COLORS.critical : 'var(--category-1)' },
                   { label: 'Missing Total', value: device.patchStatus.missingTotal },
                   { label: 'Pending Reboot', value: device.patchStatus.pendingReboot ? 'Yes' : 'No', color: device.patchStatus.pendingReboot ? STATUS_COLORS.warning : undefined },
-                  { label: 'OS End-of-Life', value: device.patchStatus.osEol ? `Yes — EOL: ${device.patchStatus.eolDate ?? '—'}` : 'No', color: device.patchStatus.osEol ? STATUS_COLORS.critical : STATUS_COLORS.compliant },
+                  { label: 'OS End-of-Life', value: device.patchStatus.osEol ? `Yes — EOL: ${device.patchStatus.eolDate ?? '—'}` : 'No', color: device.patchStatus.osEol ? STATUS_COLORS.critical : 'var(--category-1)' },
                   { label: 'Last Update Check', value: format(new Date(device.patchStatus.lastUpdateCheck), 'MMM d, yyyy HH:mm') },
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
-                    <span className="text-[12px] text-muted-foreground">{item.label}</span>
+                    <span className="text-[12px] text-black dark:text-white">{item.label}</span>
                     <span className="text-[12px] font-mono" style={item.color ? { color: item.color } : { color: '#E6E8EB' }}>
                       {String(item.value)}
                     </span>
@@ -257,7 +263,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
 
           {tab === 'history' && (
             <div className="space-y-2">
-              <p className="text-[13px] text-muted-foreground py-8 text-center">
+              <p className="text-[13px] text-black dark:text-white py-8 text-center">
                 Scan history shows the last 30 scan events for this device.
               </p>
               <div className="bg-surface border border-border rounded-md divide-y divide-border">
@@ -265,7 +271,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                   const score = device.complianceScore - i * 2
                   return (
                     <div key={i} className="flex items-center justify-between px-3 py-2.5">
-                      <span className="text-[12px] text-muted-foreground font-mono">
+                      <span className="text-[12px] text-black dark:text-white font-mono">
                         {format(new Date(Date.now() - i * 3 * 3600 * 1000), 'MMM d, HH:mm')}
                       </span>
                       <span className="text-[12px] font-mono" style={{ color: SEVERITY[scoreToSeverity(Math.max(0, score))].dot }}>
@@ -286,6 +292,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
 
 export function DevicesPage() {
   const [search, setSearch] = useState('')
+  const [page, setPage] = useState(1)
   const [osFilter, setOsFilter] = useState<OS | ''>('')
   const [statusFilter, setStatusFilter] = useState<DeviceStatus | ''>('')
   const [deptFilter, setDeptFilter] = useState('')
@@ -306,6 +313,15 @@ export function DevicesPage() {
       return true
     })
   }, [search, osFilter, statusFilter, deptFilter])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const currentPage = Math.min(page, totalPages)
+  const visibleDevices = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
+
+  function updateSearch(value: string) {
+    setSearch(value)
+    setPage(1)
+  }
 
   return (
     <>
@@ -329,7 +345,7 @@ export function DevicesPage() {
               type="text"
               placeholder="Search by name, IP, user..."
               value={search}
-              onChange={e => setSearch(e.target.value)}
+              onChange={e => updateSearch(e.target.value)}
               className="w-full h-8 bg-surface border border-border rounded-md pl-8 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
             />
           </div>
@@ -338,18 +354,18 @@ export function DevicesPage() {
           <div className="relative">
             <button
               onClick={() => { setOsOpen(!osOpen); setStatusOpen(false); setDeptOpen(false) }}
-              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
             >
               OS {osFilter ? <span className="text-brand font-medium">· {osFilter}</span> : ''}
               <ChevronDown size={12} strokeWidth={2} />
             </button>
             {osOpen && (
               <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
-                <button onClick={() => { setOsFilter(''); setOsOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">
+                <button onClick={() => { setOsFilter(''); setPage(1); setOsOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
                   All OS
                 </button>
                 {OS_OPTIONS.map(o => (
-                  <button key={o} onClick={() => { setOsFilter(o); setOsOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-hover transition-colors', osFilter === o ? 'text-brand font-medium' : 'text-muted-foreground hover:text-foreground')}>
+                  <button key={o} onClick={() => { setOsFilter(o); setPage(1); setOsOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors', osFilter === o && 'font-medium')}>
                     {o}
                   </button>
                 ))}
@@ -361,18 +377,18 @@ export function DevicesPage() {
           <div className="relative">
             <button
               onClick={() => { setStatusOpen(!statusOpen); setOsOpen(false); setDeptOpen(false) }}
-              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
             >
               Status {statusFilter ? <span className="text-brand font-medium">· {statusFilter}</span> : ''}
               <ChevronDown size={12} strokeWidth={2} />
             </button>
             {statusOpen && (
               <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
-                <button onClick={() => { setStatusFilter(''); setStatusOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">
+                <button onClick={() => { setStatusFilter(''); setPage(1); setStatusOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
                   All Statuses
                 </button>
                 {STATUS_OPTIONS.map(s => (
-                  <button key={s} onClick={() => { setStatusFilter(s); setStatusOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-hover transition-colors capitalize', statusFilter === s ? 'text-brand font-medium' : 'text-muted-foreground hover:text-foreground')}>
+                  <button key={s} onClick={() => { setStatusFilter(s); setPage(1); setStatusOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors capitalize', statusFilter === s && 'font-medium')}>
                     {s}
                   </button>
                 ))}
@@ -384,18 +400,18 @@ export function DevicesPage() {
           <div className="relative">
             <button
               onClick={() => { setDeptOpen(!deptOpen); setOsOpen(false); setStatusOpen(false) }}
-              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
             >
               Dept {deptFilter ? <span className="text-brand font-medium">· {deptFilter}</span> : ''}
               <ChevronDown size={12} strokeWidth={2} />
             </button>
             {deptOpen && (
               <div className="absolute top-full left-0 mt-1 w-44 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
-                <button onClick={() => { setDeptFilter(''); setDeptOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-muted-foreground hover:bg-surface-hover hover:text-foreground transition-colors">
+                <button onClick={() => { setDeptFilter(''); setPage(1); setDeptOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
                   All Departments
                 </button>
                 {DEPT_OPTIONS.map(dept => (
-                  <button key={dept} onClick={() => { setDeptFilter(dept); setDeptOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] hover:bg-surface-hover transition-colors', deptFilter === dept ? 'text-brand font-medium' : 'text-muted-foreground hover:text-foreground')}>
+                  <button key={dept} onClick={() => { setDeptFilter(dept); setPage(1); setDeptOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors', deptFilter === dept && 'font-medium')}>
                     {dept}
                   </button>
                 ))}
@@ -411,6 +427,7 @@ export function DevicesPage() {
                 if (f === osFilter) setOsFilter('')
                 if (f === statusFilter) setStatusFilter('')
                 if (f === deptFilter) setDeptFilter('')
+                setPage(1)
               }}>
                 <X size={11} strokeWidth={2.5} />
               </button>
@@ -419,7 +436,7 @@ export function DevicesPage() {
 
           {[osFilter, statusFilter, deptFilter].some(Boolean) && (
             <button
-              onClick={() => { setOsFilter(''); setStatusFilter(''); setDeptFilter('') }}
+              onClick={() => { setOsFilter(''); setStatusFilter(''); setDeptFilter(''); setPage(1) }}
               className="text-[12px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
             >
               Clear all
@@ -429,31 +446,37 @@ export function DevicesPage() {
         </PageHeader>
 
         <SectionCard noPadding>
-          <table className="w-full text-[13px]">
+          <table className="w-full table-fixed text-[12px]">
+            <colgroup>
+              <col className="w-[18%]" />
+              <col className="w-[13%]" />
+              <col className="w-[12%]" />
+              <col className="w-[8%]" />
+              <col className="w-[18%]" />
+              <col className="w-[16%]" />
+              <col className="w-[15%]" />
+            </colgroup>
             <thead>
               <tr className="border-b border-border">
                 {[
-                  { label: 'Status', align: 'left', sortable: true },
                   { label: 'Device', align: 'left', sortable: false },
                   { label: 'OS', align: 'left', sortable: false },
                   { label: 'IP', align: 'left', sortable: false },
-                  { label: 'User', align: 'left', sortable: false },
-                  { label: 'Dept', align: 'left', sortable: false },
-                  { label: 'Score', align: 'right', sortable: true },
+                  { label: 'Score', align: 'right', sortable: false },
                   { label: 'Checks', align: 'right', sortable: false },
-                  { label: 'Last Seen', align: 'left', sortable: true },
+                  { label: 'Status', align: 'left', sortable: false },
+                  { label: 'Last Seen', align: 'left', sortable: false },
                 ].map(h => (
-                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground', h.align === 'right' ? 'text-right' : 'text-left')}>
-                    {h.sortable ? <SortableHeader label={h.label} align={h.align as 'left' | 'right'} /> : h.label}
+                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Checks' && 'pr-8', h.label === 'Status' && 'pl-8')}>
+                    {h.label}
                   </th>
                 ))}
-                <th className="px-3 py-2 w-8" aria-hidden="true" />
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center">
+                  <td colSpan={7} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Laptop size={20} strokeWidth={1.5} className="text-muted-foreground" />
                       <p className="text-[13px] text-muted-foreground">No devices match the current filters.</p>
@@ -461,55 +484,65 @@ export function DevicesPage() {
                   </td>
                 </tr>
               ) : (
-                filtered.map((d, i) => (
+                visibleDevices.map(d => (
                   <tr
                     key={d.id}
-                    className={cn(
-                      'group border-b border-border h-14 hover:bg-surface-hover cursor-pointer transition-colors',
-                      i % 2 === 1 && 'bg-black/[0.015]'
-                    )}
+                    className="border-b border-border h-10 hover:bg-surface-hover cursor-pointer transition-colors"
                     onClick={() => setSelectedDevice(d)}
                   >
-                    <td className="px-3"><StatusIndicator status={d.status} showDot={false} /></td>
                     <td className="px-3">
-                      <span className="font-mono text-[12px] text-foreground">{d.name}</span>
+                      <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.name}</span>
                     </td>
                     <td className="px-3">
                       <div className="flex items-center gap-2">
                         <OSIcon os={d.os} />
-                        <span className="text-[12px] text-muted-foreground">{d.os}</span>
+                        <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>
                       </div>
                     </td>
-                    <td className="px-3"><span className="font-mono text-[12px] text-muted-foreground">{d.ip}</span></td>
-                    <td className="px-3 text-muted-foreground">{d.username}</td>
-                    <td className="px-3 text-muted-foreground">{d.department}</td>
-                    <td className="px-3">
-                      <span
-                        className="text-[14px] font-semibold leading-none tabular-nums"
-                        style={{ color: SEVERITY[d.status as Severity].dot, fontVariantNumeric: 'tabular-nums' }}
-                      >
+                    <td className="px-3"><span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.ip}</span></td>
+                    <td className="px-3 align-middle text-right">
+                      <span className="inline-block text-[12px] font-semibold leading-none tabular-nums text-black dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
                         {d.complianceScore}%
                       </span>
                     </td>
-                    <td className="px-3 text-right">
-                      <span className="font-mono text-[12px] font-semibold" style={{ color: SEVERITY[d.status as Severity].dot }}>{d.failedChecks}</span>
-                      <span className="font-mono text-[12px] text-muted-foreground"> / {d.failedChecks + d.passedChecks}</span>
+                    <td className="px-3 pr-8 text-right align-middle">
+                      <span className="font-mono text-[12px] font-semibold text-black dark:text-white">{d.failedChecks}</span>
+                      <span className="font-mono text-[12px] font-medium text-black dark:text-white"> / {d.failedChecks + d.passedChecks}</span>
                     </td>
-                    <td className="px-3">
-                      <LastSeenIndicator date={d.lastSeen} />
+                    <td className="px-3 pl-8">
+                      <span className="text-[12px] font-semibold text-foreground">{d.status === 'compliant' ? 'Healthy' : d.status.charAt(0).toUpperCase() + d.status.slice(1)}</span>
                     </td>
-                    <td className="px-3">
-                      <ChevronRight size={14} strokeWidth={2} className="text-muted-foreground/40 opacity-0 group-hover:opacity-100 transition-opacity" />
-                    </td>
+                    <td className="px-3"><span className="text-[12px] font-medium text-black dark:text-white">{formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}</span></td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
           <div className="px-3 py-2 border-t border-border flex items-center justify-between">
-            <p className="text-[12px] text-muted-foreground">
-              Showing 1–{Math.min(filtered.length, 20)} of {filtered.length} devices
+            <p className="text-[12px] font-medium text-black dark:text-white">
+              Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} devices
             </p>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setPage(currentPage - 1)}
+                disabled={currentPage === 1}
+                aria-label="Previous page"
+                className="flex h-7 w-7 items-center justify-center rounded border border-border text-black dark:text-white transition-colors hover:bg-surface-hover hover:text-black dark:hover:text-white disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronLeft size={14} strokeWidth={1.75} />
+              </button>
+              <span className="min-w-16 text-center text-[12px] font-medium text-black dark:text-white">Page {currentPage} of {totalPages}</span>
+              <button
+                type="button"
+                onClick={() => setPage(currentPage + 1)}
+                disabled={currentPage === totalPages}
+                aria-label="Next page"
+                className="flex h-7 w-7 items-center justify-center rounded border border-border text-black dark:text-white transition-colors hover:bg-surface-hover hover:text-black dark:hover:text-white disabled:pointer-events-none disabled:opacity-40"
+              >
+                <ChevronRight size={14} strokeWidth={1.75} />
+              </button>
+            </div>
           </div>
         </SectionCard>
       </div>

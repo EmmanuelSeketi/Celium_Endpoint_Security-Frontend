@@ -5,6 +5,7 @@ import { RefreshCw, AlertTriangle, CheckCircle2, Clock, ExternalLink } from 'luc
 import { devices, missingPatches, getFleetStats } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { ComplianceBar } from '@/components/ui/compliance-bar'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
@@ -77,11 +78,13 @@ export function PatchCompliancePage() {
             color: eolDevices.length > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant,
           },
         ].map(({ label, value, description, color }) => (
-          <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">{label}</p>
-            <p className="text-[30px] font-semibold leading-none tabular-nums mb-1" style={{ color }}>{value}</p>
-            <p className="text-[12px] text-muted-foreground">{description}</p>
-          </div>
+          <KpiCard
+            key={label}
+            label={label}
+            value={value}
+            description={description}
+            accentColor={color}
+          />
         ))}
       </div>
 

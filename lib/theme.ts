@@ -4,10 +4,10 @@
  */
 
 export const STATUS_COLORS = {
-  critical: '#f35865',
-  warning: '#ffc758',
-  compliant: '#495afb',
-  success: '#495afb',
+  critical: 'var(--status-critical)',
+  warning: 'var(--status-warning)',
+  compliant: 'var(--status-good)',
+  success: 'var(--status-good)',
   info: '#3B82F6',
   unknown: '#6B7280',
   offline: '#6B7280',
@@ -15,9 +15,9 @@ export const STATUS_COLORS = {
 } as const
 
 export const CATEGORY_COLORS = {
-  active_directory: '#8B7FE8',
-  malware_protection: '#E87F9B',
-  os_updates: '#7FC4E8',
+  active_directory: 'var(--category-2)',
+  malware_protection: 'var(--category-1)',
+  os_updates: 'var(--category-3)',
   other: '#6B7280',
 } as const
 

@@ -19,9 +19,9 @@ const jetbrainsMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: 'Fleet Compliance — EDR/XDR Monitoring',
+  title: 'RISQPOINT ENDPOINT SECURITY',
   description: 'Enterprise fleet compliance monitoring platform for SOC analysts and IT admins.',
-  generator: 'v0.app',
+  generator: 'Celium Enterprise Limited',
   icons: [
     { rel: 'icon', url: '/icon.svg' },
     { rel: 'apple', url: '/apple-icon.png' },

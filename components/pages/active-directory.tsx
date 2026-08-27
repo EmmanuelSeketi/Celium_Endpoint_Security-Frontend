@@ -20,7 +20,7 @@ const ANOMALY_LABELS = {
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-popover border border-border rounded-md px-3 py-2 text-[12px] shadow-lg">
+    <div className="bg-popover border border-border rounded-md px-3 py-2 text-[12px] font-medium shadow-lg">
       <p className="text-muted-foreground mb-1.5">{label}</p>
       {payload.map(p => (
         <div key={p.name} className="flex items-center gap-2">
@@ -94,8 +94,8 @@ export function ActiveDirectoryPage() {
               <div className="flex items-center gap-3">
                 <Network size={16} strokeWidth={1.5} className={dc.online ? 'text-[#008080]' : 'text-[#F04438]'} />
                 <div>
-                  <p className="font-mono text-[13px] font-medium text-foreground">{dc.name}</p>
-                  <p className="text-[11px] text-muted-foreground">{dc.site}</p>
+                  <p className="font-mono text-[12px] font-semibold text-foreground">{dc.name}</p>
+                  <p className="text-[12px] text-muted-foreground">{dc.site}</p>
                 </div>
               </div>
               <div className="flex items-center gap-6">
@@ -103,7 +103,7 @@ export function ActiveDirectoryPage() {
                   {dc.online
                     ? <CheckCircle2 size={13} strokeWidth={2} className="text-[#008080]" />
                     : <XCircle size={13} strokeWidth={2} className="text-[#F04438]" />}
-                  <span className={cn('text-[12px]', dc.online ? 'text-[#008080]' : 'text-[#F04438]')}>
+                  <span className={cn('text-[12px] font-medium', dc.online ? 'text-[#008080]' : 'text-[#F04438]')}>
                     {dc.online ? 'Online' : 'Offline'}
                   </span>
                 </div>
@@ -111,11 +111,11 @@ export function ActiveDirectoryPage() {
                   {dc.replicationHealthy
                     ? <CheckCircle2 size={13} strokeWidth={2} className="text-[#008080]" />
                     : <AlertTriangle size={13} strokeWidth={2} className="text-[#F79009]" />}
-                  <span className={cn('text-[12px]', dc.replicationHealthy ? 'text-[#008080]' : 'text-[#F79009]')}>
+                  <span className={cn('text-[12px] font-medium', dc.replicationHealthy ? 'text-[#008080]' : 'text-[#F79009]')}>
                     {dc.replicationHealthy ? 'Replication OK' : 'Replication Issue'}
                   </span>
                 </div>
-                <div className="text-[12px] text-muted-foreground hidden md:block">
+                <div className="text-[12px] font-medium text-muted-foreground hidden md:block">
                   Last replicated {formatDistanceToNow(new Date(dc.lastReplication), { addSuffix: true })}
                 </div>
               </div>
@@ -159,7 +159,7 @@ export function ActiveDirectoryPage() {
           {kerberosAnomalies.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-32 gap-2">
               <CheckCircle2 size={20} strokeWidth={1.5} className="text-[#008080]" />
-              <p className="text-[13px] text-muted-foreground">No anomalies detected</p>
+              <p className="text-[12px] font-medium text-muted-foreground">No anomalies detected</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -176,14 +176,14 @@ export function ActiveDirectoryPage() {
                         {a.severity}
                       </span>
                     </div>
-                    <span className="text-[11px] text-muted-foreground shrink-0">
+                    <span className="text-[12px] font-medium text-muted-foreground shrink-0">
                       {formatDistanceToNow(new Date(a.timestamp), { addSuffix: true })}
                     </span>
                   </div>
-                  <p className="text-[13px] text-foreground font-medium mt-1.5">
+                  <p className="text-[12px] text-foreground font-semibold mt-1.5">
                     {ANOMALY_LABELS[a.type] ?? a.type}
                   </p>
-                  <p className="font-mono text-[11px] text-muted-foreground mt-0.5">{a.account}</p>
+                  <p className="font-mono text-[12px] font-medium text-muted-foreground mt-0.5">{a.account}</p>
                 </div>
               ))}
             </div>
@@ -201,11 +201,11 @@ export function ActiveDirectoryPage() {
             <span>Action</span>
           </div>
           {privilegedGroupChanges.map((change, i) => (
-            <div key={i} className="grid grid-cols-4 px-3 py-2.5 text-[13px] border-b border-border last:border-0 hover:bg-surface-hover transition-colors items-center">
+            <div key={i} className="grid grid-cols-4 px-3 py-2.5 text-[12px] font-medium border-b border-border last:border-0 hover:bg-surface-hover transition-colors items-center">
               <span className="text-muted-foreground text-[12px]">
                 {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
               </span>
-              <span className="font-mono text-foreground text-[12px]">{change.account}</span>
+              <span className="font-mono font-semibold text-foreground text-[12px]">{change.account}</span>
               <span className="text-muted-foreground text-[12px]">{change.group}</span>
               <div className="flex items-center gap-1.5">
                 {change.action === 'added'
@@ -226,40 +226,40 @@ export function ActiveDirectoryPage() {
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <div className="bg-card border border-border rounded-md shadow-sm p-4 col-span-2">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-3">Logon Summary (24h)</p>
+          <p className="text-[13px] font-semibold uppercase tracking-wider text-foreground mb-3">Logon Summary (24h)</p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
               <CheckCircle2 size={16} strokeWidth={1.5} className="text-[#008080]" />
               <div>
-                <p className="text-[22px] font-semibold tabular-nums text-[#008080]">{successfulLogons24h.toLocaleString()}</p>
-                <p className="text-[11px] text-muted-foreground">Successful</p>
+                <p className="text-[30px] font-semibold leading-none tabular-nums text-[#008080]">{successfulLogons24h.toLocaleString()}</p>
+                <p className="text-[12px] font-medium text-muted-foreground">Successful</p>
               </div>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="flex items-center gap-2">
               <XCircle size={16} strokeWidth={1.5} className="text-[#F04438]" />
               <div>
-                <p className="text-[22px] font-semibold tabular-nums text-[#F04438]">{failedLogons24h}</p>
-                <p className="text-[11px] text-muted-foreground">Failed ({failRate}%)</p>
+                <p className="text-[30px] font-semibold leading-none tabular-nums text-[#F04438]">{failedLogons24h}</p>
+                <p className="text-[12px] font-medium text-muted-foreground">Failed ({failRate}%)</p>
               </div>
             </div>
           </div>
         </div>
         <div className="bg-card border border-border rounded-md shadow-sm p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">Stale Accounts</p>
+          <p className="text-[13px] font-semibold uppercase tracking-wider text-foreground mb-2">Stale Accounts</p>
           <div className="flex items-center gap-2">
             <Users size={16} strokeWidth={1.5} className="text-[#F79009]" />
             <span className="text-[30px] font-semibold tabular-nums text-[#F79009]">{staleAccounts}</span>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">No login in 90+ days</p>
+          <p className="text-[12px] font-medium text-muted-foreground mt-1">No login in 90+ days</p>
         </div>
         <div className="bg-card border border-border rounded-md shadow-sm p-4">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">Group Changes (7d)</p>
+          <p className="text-[13px] font-semibold uppercase tracking-wider text-foreground mb-2">Group Changes (7d)</p>
           <div className="flex items-center gap-2">
             <Clock size={16} strokeWidth={1.5} className="text-brand" />
             <span className="text-[30px] font-semibold tabular-nums text-brand">{privilegedGroupChanges.length}</span>
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1">Privileged group changes</p>
+          <p className="text-[12px] font-medium text-muted-foreground mt-1">Privileged group changes</p>
         </div>
       </div>
     </div>

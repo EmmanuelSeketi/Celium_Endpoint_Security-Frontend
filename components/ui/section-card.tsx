@@ -22,7 +22,7 @@ export function SectionCard({
   noPadding = false,
 }: SectionCardProps) {
   return (
-    <div className={cn('bg-card border border-border rounded-md shadow-sm', className)}>
+    <div className={cn('bg-card border border-border rounded-md shadow-card', className)}>
       {(title || action) && (
         <div className="flex items-center justify-between px-4 py-3 border-b border-border">
           <div>

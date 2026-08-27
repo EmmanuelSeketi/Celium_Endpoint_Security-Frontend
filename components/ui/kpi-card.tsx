@@ -14,6 +14,7 @@ interface KpiCardProps {
   accentColor?: string
   className?: string
   childrenClassName?: string
+  labelClassName?: string
   children?: React.ReactNode
 }
 
@@ -29,6 +30,7 @@ export function KpiCard({
   accentColor,
   className,
   childrenClassName,
+  labelClassName,
   children,
 }: KpiCardProps) {
   const trendColor =
@@ -43,12 +45,12 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        'relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-sm p-4 flex flex-col gap-2 text-black dark:text-white',
+        'relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card p-4 flex flex-col gap-2 text-foreground',
         className
       )}
     >
-      <div className="absolute left-1/2 -top-3 -translate-x-1/2 z-10 bg-card border border-border rounded-full px-5 py-1 text-center whitespace-nowrap">
-        <span className="text-[12px] font-semibold text-black dark:text-white">
+      <div className="flex items-center -mx-4 -mt-4 px-4 py-3 mb-1 border-b border-border">
+        <span className={cn('text-[13px] font-semibold uppercase tracking-wider text-foreground', labelClassName)}>
           {label}
         </span>
       </div>
@@ -78,7 +80,7 @@ export function KpiCard({
       )}
 
       {description && (
-        <p className="text-[12px] font-medium text-black dark:text-white leading-snug">{description}</p>
+        <p className="text-[12px] font-medium text-foreground leading-snug">{description}</p>
       )}
 
       <div className={cn('mt-auto', childrenClassName)}>

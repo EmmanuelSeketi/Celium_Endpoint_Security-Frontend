@@ -3,7 +3,6 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSidebar } from '@/lib/sidebar-context'
-import { useTheme } from '@/lib/theme-provider'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -31,7 +30,6 @@ const BOTTOM_ITEMS = [
 
 export function Sidebar() {
   const { collapsed, setCollapsed } = useSidebar()
-  const { theme } = useTheme()
   const pathname = usePathname()
 
   function isActive(href: string) {
@@ -42,29 +40,11 @@ export function Sidebar() {
   return (
     <aside
       className={cn(
-        'fixed left-0 top-0 h-screen flex flex-col z-30 transition-all duration-200',
+        'fixed left-0 top-14 h-[calc(100vh-3.5rem)] flex flex-col z-30 transition-all duration-200',
         'border-r border-border bg-sidebar',
         collapsed ? 'w-16' : 'w-60'
       )}
     >
-      {/* Logo */}
-      <div className={cn(
-        'flex items-center h-14 border-b border-border shrink-0',
-        collapsed ? 'px-4 justify-center' : 'px-4'
-      )}>
-        {!collapsed ? (
-          <img
-            src={theme === 'dark' ? '/Risq Dark.png' : '/Risq Light.png'}
-            alt="Risq"
-            className="h-9 w-auto object-contain"
-          />
-        ) : (
-          <div className="w-7 h-7 rounded bg-brand/15 flex items-center justify-center shrink-0">
-            <span className="text-brand font-semibold text-[11px]">FC</span>
-          </div>
-        )}
-      </div>
-
       {/* Main Nav */}
       <nav className="flex-1 overflow-y-auto py-2 px-2">
         <ul className="space-y-0.5">
@@ -75,7 +55,7 @@ export function Sidebar() {
                 <Link
                   href={href}
                   className={cn(
-                    'flex items-center gap-2.5 rounded-full text-[12px] font-medium text-black transition-colors relative group',
+                    'flex items-center gap-2.5 rounded-md text-[12px] font-medium text-black transition-colors relative group',
                     collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5',
                     active
                       ? 'bg-surface-hover text-foreground'
@@ -130,7 +110,7 @@ export function Sidebar() {
               key={href}
               href={href}
               className={cn(
-                'flex items-center gap-2.5 rounded-full text-[12px] font-medium text-black transition-colors relative',
+                'flex items-center gap-2.5 rounded-md text-[12px] font-medium text-black transition-colors relative',
                 collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5',
                 active
                   ? 'bg-surface-hover text-foreground'
@@ -154,7 +134,7 @@ export function Sidebar() {
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
-            'flex items-center gap-2.5 rounded-full text-[12px] font-medium text-black transition-colors hover:text-black hover:bg-surface-hover w-full',
+            'flex items-center gap-2.5 rounded-md text-[12px] font-medium text-black transition-colors hover:text-black hover:bg-surface-hover w-full',
             collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5'
           )}
           title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
