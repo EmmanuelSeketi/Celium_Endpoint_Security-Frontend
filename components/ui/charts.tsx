@@ -148,8 +148,8 @@ interface OSComplianceBarChartProps {
 export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChartProps) {
   const osColors: Record<string, string> = {
     Windows: 'var(--category-1)',
-    macOS: 'var(--category-2)',
-    Linux: 'var(--category-3)',
+    macOS: '#DC2626',
+    Linux: '#D97706',
   }
 
   function CustomAxisTick(props: any) {
@@ -201,7 +201,7 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
         <XAxis dataKey="os" tick={<CustomAxisTick />} axisLine={false} tickLine={false} />
         <YAxis tick={OS_AXIS_STYLE} axisLine={false} tickLine={false} domain={[0, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-hover)', stroke: CHART_GRID, strokeWidth: 1 }} />
-        <Bar dataKey="score" name="Avg Score %" radius={[4, 4, 0, 0]}>
+        <Bar dataKey="score" name="Avg Score %" radius={[0, 0, 0, 0]}>
           {data.map((entry) => (
             <Cell key={entry.os} fill={osColors[entry.os] ?? BRAND} />
           ))}
@@ -248,6 +248,7 @@ export function FailingChecksPieChart({ data, height = 180, showArcLabels = true
     height: chartSize,
     hideLegend: true,
   }
+  const maxValue = Math.max(...chartData.map(entry => entry.value), 1)
 
   const series = {
     innerRadius: height <= 120 ? 27 : 27,
@@ -283,16 +284,27 @@ export function FailingChecksPieChart({ data, height = 180, showArcLabels = true
           </span>
         )}
       </div>
-      <div className="min-w-0 flex-1 space-y-2">
-        {chartData.map(entry => (
-          <div key={entry.name} className="flex items-start gap-2 min-w-0">
-            <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: entry.color }} />
-            <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-black dark:text-white" title={entry.name}>
-              {entry.name}
-            </span>
-            <span className="shrink-0 font-mono text-[12px] font-medium text-black dark:text-white">{entry.value}</span>
-          </div>
-        ))}
+      <div className="min-w-0 flex-1 space-y-2.5">
+        {chartData.map(entry => {
+          const width = `${Math.max((entry.value / maxValue) * 100, 8)}%`
+
+          return (
+            <div key={entry.name} className="min-w-0">
+              <div className="mb-1 flex items-center justify-between gap-2">
+                <span className="truncate text-[12px] font-medium text-black dark:text-white" title={entry.name}>
+                  {entry.name}
+                </span>
+                <span className="shrink-0 font-mono text-[12px] font-medium text-black dark:text-white">{entry.value}</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                <div
+                  className="h-full rounded-full transition-all"
+                  style={{ width, backgroundColor: entry.color }}
+                />
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

@@ -134,15 +134,21 @@ export function OverviewPage() {
             <span className="text-[30px] font-semibold leading-none tabular-nums text-black dark:text-white">
               {stats.needingAttention}
             </span>
-            <div className="flex flex-col gap-1.5 pt-6 text-[12px] font-medium text-black dark:text-white">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-status-warning shrink-0" />
-                Warning ({stats.warning})
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-status-critical shrink-0" />
-                Critical ({stats.critical})
-              </span>
+            <div className="flex w-[54%] min-w-0 flex-col gap-2 pt-1 text-[12px] font-medium text-black dark:text-white">
+              {[
+                { label: 'Warning', count: stats.warning, color: 'bg-status-warning', width: `${Math.max((stats.warning / Math.max(stats.needingAttention, 1)) * 100, 8)}%` },
+                { label: 'Critical', count: stats.critical, color: 'bg-status-critical', width: `${Math.max((stats.critical / Math.max(stats.needingAttention, 1)) * 100, 8)}%` },
+              ].map(item => (
+                <div key={item.label} className="min-w-0">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span>{item.label}</span>
+                    <span className="font-mono">{item.count}</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                    <div className={`h-full rounded-full ${item.color}`} style={{ width: item.width }} />
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </KpiCard>
