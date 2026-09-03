@@ -1,13 +1,13 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { cn } from '@/lib/utils'
 import {
   ChevronDown,
   Search,
   Sun,
 } from 'lucide-react'
-import { alerts } from '@/lib/mock-data'
+import { Alert, getAlerts } from '@/lib/api-client'
 import { StatusDot } from '@/components/ui/status-badge'
 import { useTheme } from '@/lib/theme-provider'
 
@@ -18,8 +18,15 @@ export function Header() {
   const [dateRange, setDateRange] = useState('Last 7 days')
   const [dateOpen, setDateOpen] = useState(false)
   const [notiOpen, setNotiOpen] = useState(false)
+  const [liveAlerts, setLiveAlerts] = useState<Alert[]>([])
 
-  const criticalAlerts = alerts.filter(a => a.severity === 'critical')
+  useEffect(() => {
+    getAlerts()
+      .then(next => setLiveAlerts(Array.isArray(next) ? next : []))
+      .catch(() => setLiveAlerts([]))
+  }, [])
+
+  const criticalAlerts = liveAlerts.filter(a => a.severity === 'critical' && a.status === 'active')
   const unreadCount = criticalAlerts.length
 
   return (
@@ -105,17 +112,18 @@ export function Header() {
               <span className="text-[11px] text-muted-foreground">{unreadCount} unread</span>
             </div>
             <div className="max-h-80 overflow-y-auto">
-              {alerts.slice(0, 6).map(alert => (
-                <div key={alert.id} className="flex gap-3 px-3 py-2.5 border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
-                  <StatusDot status={alert.severity} className="mt-0.5 shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[12px] text-foreground leading-snug">{alert.message}</p>
-                    {alert.deviceName && (
-                      <span className="text-[11px] font-mono text-muted-foreground">{alert.deviceName}</span>
-                    )}
+              {liveAlerts.length === 0 ? (
+                <div className="px-3 py-6 text-center text-[12px] text-muted-foreground">No alerts yet</div>
+              ) : (
+                liveAlerts.slice(0, 6).map(alert => (
+                  <div key={alert.id} className="flex gap-3 px-3 py-2.5 border-b border-border last:border-0 hover:bg-surface-hover transition-colors">
+                    <StatusDot status={alert.severity} className="mt-0.5 shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[12px] text-foreground leading-snug">{alert.message}</p>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
             <div className="px-3 py-2 border-t border-border">
               <button className="text-[12px] text-brand hover:text-brand/80 transition-colors">View all alerts</button>

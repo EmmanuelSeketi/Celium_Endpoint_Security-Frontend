@@ -1,23 +1,16 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
-import { ArrowRight, TrendingDown, TrendingUp, AlertCircle } from 'lucide-react'
+import { ArrowRight, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import {
-  devices,
-  alerts,
-  scanActivity,
-  complianceChecks,
-  getFleetStats,
-} from '@/lib/mock-data'
-import { getComplianceScoreColor, getCategoryLabel, STATUS_COLORS } from '@/lib/theme'
+import { getCategoryLabel } from '@/lib/theme'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
-import { CategoryBadge } from '@/components/ui/status-badge'
-import { ScoreBar, LastSeenIndicator } from '@/components/ui/compliance-bar'
 import { OSComplianceBarChart, FailingChecksPieChart, RiskHeatmap } from '@/components/ui/charts'
+import { Alert, ComplianceCheck, ComplianceSummary, ManagedDevice, getAlerts, getComplianceChecks, getComplianceSummary, getDevices } from '@/lib/api-client'
 
 function OSIcon({ os, className }: { os: string; className?: string }) {
   if (os === 'Windows') {
@@ -44,46 +37,38 @@ function OSIcon({ os, className }: { os: string; className?: string }) {
 }
 
 export function OverviewPage() {
-  const stats = getFleetStats()
+  const [summary, setSummary] = useState<ComplianceSummary>({ total_devices: 0, active_devices: 0, compliant_count: 0, non_compliant: 0, error_count: 0 })
+  const [liveDevices, setLiveDevices] = useState<ManagedDevice[]>([])
+  const [liveAlerts, setLiveAlerts] = useState<Alert[]>([])
+  const [liveChecks, setLiveChecks] = useState<ComplianceCheck[]>([])
+  const totalDevices = summary.total_devices
+  const activeDevices = summary.active_devices
+  const devicesNeedingAttention = summary.non_compliant
+  const errors = summary.error_count
+
+  useEffect(() => {
+    Promise.all([getComplianceSummary(), getDevices(), getAlerts(), getComplianceChecks()])
+      .then(([nextSummary, nextDevices, nextAlerts, nextChecks]) => {
+        setSummary(nextSummary)
+        setLiveDevices(Array.isArray(nextDevices) ? nextDevices : [])
+        setLiveAlerts(Array.isArray(nextAlerts) ? nextAlerts : [])
+        setLiveChecks(Array.isArray(nextChecks) ? nextChecks : [])
+      })
+      .catch(() => undefined)
+  }, [])
 
   const osByScore = [
-    { os: 'Windows', score: stats.byOS.Windows.avg },
-    { os: 'macOS', score: stats.byOS.Mac.avg },
-    { os: 'Linux', score: stats.byOS.Linux.avg },
+    { os: 'Windows', score: 0 },
+    { os: 'macOS', score: 0 },
+    { os: 'Linux', score: 0 },
   ]
 
-  const topFailingChecks = [...complianceChecks]
-    .sort((a, b) => b.failingDeviceCount - a.failingDeviceCount)
-    .slice(0, 5)
-    .map(check => ({ name: check.name, value: check.failingDeviceCount }))
+  const topFailingChecks = liveChecks.slice(0, 5).map(check => ({ name: check.title, value: 0 }))
 
   // Risk heatmap: departments × category
   const departments = ['Engineering', 'Finance', 'Sales', 'HR', 'IT', 'Marketing', 'Design']
   const categories = ['malware_protection', 'os_updates', 'active_directory', 'other'] as const
-  const heatmapData = departments.map(dept => {
-    const deptDevices = devices.filter(d => d.department === dept)
-    return {
-      dept,
-      scores: categories.map(cat => {
-        const checks = complianceChecks.filter(c => c.category === cat)
-        const failing = checks.reduce((s, c) => s + (deptDevices.length > 0 ? Math.floor((c.failingDeviceCount / devices.length) * deptDevices.length) : 0), 0)
-        const total = checks.length * deptDevices.length
-        const risk = total > 0 ? Math.min(100, Math.round((failing / total) * 100)) : 0
-        return risk
-      }),
-    }
-  })
-
-  function riskColor(pct: number) {
-    if (pct < 5) return 'bg-status-goodBg'
-    if (pct < 15) return 'bg-status-warningBg'
-    return 'bg-status-criticalBg'
-  }
-  function riskText(pct: number) {
-    if (pct < 5) return 'text-status-good'
-    if (pct < 15) return 'text-status-warning'
-    return 'text-status-critical'
-  }
+  const heatmapData = departments.map(() => categories.map(() => 0))
 
   return (
     <div className="space-y-4">
@@ -95,8 +80,8 @@ export function OverviewPage() {
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
-          label="Average Fleet Score"
-          value={`${stats.avgScore}%`}
+          label="Active Devices"
+          value={`${activeDevices}/${totalDevices}`}
           accentColor="var(--category-1)"
           description={
             <span className="inline-flex items-center gap-1.5">
@@ -104,7 +89,7 @@ export function OverviewPage() {
                 <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--category-1)] opacity-75 animate-ping" />
                 <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--category-1)]" />
               </span>
-              Healthy
+              Reporting
             </span>
           }
         />
@@ -114,14 +99,14 @@ export function OverviewPage() {
         >
           <FailingChecksPieChart
             data={[
-              { name: 'Healthy', value: stats.compliant },
-              { name: 'Warning', value: stats.warning },
-              { name: 'Critical', value: stats.critical },
+              { name: 'Healthy', value: summary.compliant_count },
+              { name: 'Warning', value: summary.non_compliant },
+              { name: 'Critical', value: summary.error_count },
             ]}
             height={96}
             showArcLabels={false}
             showTotal
-            totalOverride={24}
+            totalOverride={totalDevices}
             colors={['var(--category-1)', 'var(--status-warning)', 'var(--status-critical)']}
           />
         </KpiCard>
@@ -132,12 +117,12 @@ export function OverviewPage() {
         >
           <div className="flex items-start justify-between gap-4">
             <span className="text-[30px] font-semibold leading-none tabular-nums text-black dark:text-white">
-              {stats.needingAttention}
+              {devicesNeedingAttention}
             </span>
             <div className="flex w-[54%] min-w-0 flex-col gap-2 pt-1 text-[12px] font-medium text-black dark:text-white">
               {[
-                { label: 'Warning', count: stats.warning, color: 'bg-status-warning', width: `${Math.max((stats.warning / Math.max(stats.needingAttention, 1)) * 100, 8)}%` },
-                { label: 'Critical', count: stats.critical, color: 'bg-status-critical', width: `${Math.max((stats.critical / Math.max(stats.needingAttention, 1)) * 100, 8)}%` },
+                { label: 'Failed', count: devicesNeedingAttention, color: 'bg-status-warning', width: `${Math.max((devicesNeedingAttention / Math.max(devicesNeedingAttention + errors, 1)) * 100, 8)}%` },
+                { label: 'Errors', count: errors, color: 'bg-status-critical', width: `${Math.max((errors / Math.max(devicesNeedingAttention + errors, 1)) * 100, 8)}%` },
               ].map(item => (
                 <div key={item.label} className="min-w-0">
                   <div className="mb-1 flex items-center justify-between gap-2">
@@ -155,8 +140,8 @@ export function OverviewPage() {
 
         <KpiCard
           label="Avg MTTR"
-          value="4.2h"
-          description="Improving · Lower is better"
+          value="0h"
+          description="No remediation data"
         />
       </div>
 
@@ -168,9 +153,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Active Directory</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Domain Controllers</span><span className="text-black dark:text-white tabular-nums">healthy (3/3)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Failed logons (24h)</span><span className="text-black dark:text-white tabular-nums">(47)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Stale accounts</span><span className="text-black dark:text-white tabular-nums">(11)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Domain Controllers</span><span className="text-black dark:text-white tabular-nums">healthy (0/0)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Failed logons (24h)</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Stale accounts</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
               </div>
             </div>
           </Link>
@@ -179,9 +164,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Malware Protection</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">({stats.rtpCoverage}%)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">({stats.defCompliance}%)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Active detections</span><span className="text-black dark:text-white tabular-nums">({stats.activeDetections})</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">(0%)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">(0%)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Active detections</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
               </div>
             </div>
           </Link>
@@ -190,9 +175,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Patch Compliance</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">({stats.patchCompliance}%)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">({stats.missingCriticalTotal})</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Pending reboot</span><span className="text-black dark:text-white tabular-nums">({stats.pendingReboot})</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">(0%)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Pending reboot</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
               </div>
             </div>
           </Link>
@@ -212,7 +197,7 @@ export function OverviewPage() {
             }
             noPadding
           >
-            {alerts.length === 0 ? (
+            {liveAlerts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2">
                 <AlertCircle size={20} className="text-muted-foreground" strokeWidth={1.5} />
                 <p className="text-[12px] text-muted-foreground">No alerts in the selected range</p>
@@ -228,16 +213,16 @@ export function OverviewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {alerts.slice(0, 4).map(alert => (
+                    {liveAlerts.slice(0, 4).map(alert => (
                       <tr key={alert.id} className="h-10 border-b border-border font-medium last:border-b-0 hover:bg-surface-hover transition-colors">
                         <td className="max-w-0 px-4 py-2">
                           <span className="block truncate text-foreground" title={alert.message}>{alert.message}</span>
                         </td>
                         <td className="max-w-0 px-2 py-2 text-black dark:text-white">
-                          <span className="block truncate font-mono">{alert.deviceName ?? '—'}</span>
+                          <span className="block truncate font-mono">—</span>
                         </td>
                         <td className="px-4 py-2 text-right text-black dark:text-white whitespace-nowrap">
-                          {formatDistanceToNow(new Date(alert.timestamp), { addSuffix: true })}
+                          {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
                         </td>
                       </tr>
                     ))}
@@ -259,16 +244,16 @@ export function OverviewPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {scanActivity.slice(0, 4).map((s, i) => (
-                    <tr key={i} className="h-10 border-b border-border last:border-b-0 hover:bg-surface-hover transition-colors">
+                  {liveDevices.slice(0, 4).map(device => (
+                    <tr key={device.id} className="h-10 border-b border-border last:border-b-0 hover:bg-surface-hover transition-colors">
                       <td className="max-w-0 px-4 py-2">
-                        <span className="block truncate font-mono" title={s.deviceName}>{s.deviceName}</span>
+                        <span className="block truncate font-mono" title={device.hostname}>{device.hostname}</span>
                       </td>
                       <td className="px-2 py-2">
-                        <span>{s.status === 'compliant' ? 'Healthy' : s.status.charAt(0).toUpperCase() + s.status.slice(1)}</span>
+                        <span>{device.status === 'active' ? 'Active' : device.status.charAt(0).toUpperCase() + device.status.slice(1)}</span>
                       </td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
-                        {formatDistanceToNow(new Date(s.timestamp), { addSuffix: true })}
+                        {device.last_checkin ? formatDistanceToNow(new Date(device.last_checkin), { addSuffix: true }) : 'Never'}
                       </td>
                     </tr>
                   ))}
@@ -302,7 +287,7 @@ export function OverviewPage() {
         <RiskHeatmap
           categories={categories.map(category => getCategoryLabel(category))}
           departments={departments}
-          values={heatmapData.map(row => row.scores)}
+          values={heatmapData}
           height={340}
         />
       </SectionCard>
@@ -346,35 +331,35 @@ export function OverviewPage() {
             </tr>
           </thead>
           <tbody>
-            {devices.slice(0, 10).map(d => (
+            {liveDevices.slice(0, 10).map(d => (
               <tr
                 key={d.id}
                 className="border-b border-border h-10 hover:bg-surface-hover transition-colors"
               >
                 <td className="px-3">
-                  <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.name}</span>
+                  <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.hostname}</span>
                 </td>
                 <td className="px-3">
                   <div className="flex items-center gap-2">
-                    <OSIcon os={d.os} />
+                    <OSIcon os={d.os === 'macos' ? 'Mac' : d.os.charAt(0).toUpperCase() + d.os.slice(1)} />
                     <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>
                   </div>
                 </td>
-                <td className="px-3"><span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.ip}</span></td>
+                <td className="px-3"><span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.ip_address}</span></td>
                 <td className="px-3 align-middle text-right">
                   <span className="inline-block text-[12px] font-semibold leading-none tabular-nums text-black dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    {d.complianceScore}%
+                    0%
                   </span>
                 </td>
                 <td className="px-3 pr-8 text-right align-middle">
-                  <span className="font-mono text-[12px] font-semibold text-black dark:text-white">{d.failedChecks}</span>
-                  <span className="font-mono text-[12px] font-medium text-black dark:text-white"> / {d.failedChecks + d.passedChecks}</span>
+                  <span className="font-mono text-[12px] font-semibold text-black dark:text-white">0</span>
+                  <span className="font-mono text-[12px] font-medium text-black dark:text-white"> / 0</span>
                 </td>
                 <td className="px-3 pl-8">
-                  <span className="text-[12px] font-semibold text-foreground">{d.status === 'compliant' ? 'Healthy' : d.status.charAt(0).toUpperCase() + d.status.slice(1)}</span>
+                  <span className="text-[12px] font-semibold text-foreground">{d.status.charAt(0).toUpperCase() + d.status.slice(1)}</span>
                 </td>
                 <td className="px-3">
-                  <span className="text-[12px] font-medium text-black dark:text-white">{formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}</span>
+                  <span className="text-[12px] font-medium text-black dark:text-white">{d.last_checkin ? formatDistanceToNow(new Date(d.last_checkin), { addSuffix: true }) : 'Never'}</span>
                 </td>
               </tr>
             ))}
@@ -382,7 +367,7 @@ export function OverviewPage() {
         </table>
         <div className="px-3 py-2 border-t border-border flex items-center justify-between">
           <p className="text-[12px] text-muted-foreground">
-            Showing 1–{Math.min(devices.length, 10)} of {devices.length} devices
+            Showing {liveDevices.length === 0 ? 0 : 1}–{Math.min(liveDevices.length, 10)} of {liveDevices.length} devices
           </p>
         </div>
       </SectionCard>

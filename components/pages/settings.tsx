@@ -1,14 +1,17 @@
 'use client'
 
-import { useState } from 'react'
-import { Settings, Bell, Shield, Key, Users, Globe, Save, Eye, EyeOff } from 'lucide-react'
+import { FormEvent, useState } from 'react'
+import { Settings, Bell, Shield, Key, Save, Eye, EyeOff, UserCircle, LogOut } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/lib/auth-provider'
 
-type Section = 'general' | 'notifications' | 'security' | 'api'
+type Section = 'account' | 'general' | 'notifications' | 'security' | 'api'
 
 const SECTIONS: { id: Section; label: string; icon: typeof Settings }[] = [
+  { id: 'account', label: 'Account', icon: UserCircle },
   { id: 'general', label: 'General', icon: Settings },
   { id: 'notifications', label: 'Notifications', icon: Bell },
   { id: 'security', label: 'Security Policies', icon: Shield },
@@ -79,7 +82,7 @@ function TextField({
 }
 
 export function SettingsPage() {
-  const [section, setSection] = useState<Section>('general')
+  const [section, setSection] = useState<Section>('account')
   const [saved, setSaved] = useState(false)
 
   // General
@@ -141,6 +144,8 @@ export function SettingsPage() {
 
         {/* Content */}
         <div className="flex-1 min-w-0 space-y-4">
+          {section === 'account' && <AccountSection />}
+
           {section === 'general' && (
             <SectionCard title="General Settings">
               <SettingRow label="Fleet Name" description="Display name for this fleet.">
@@ -234,22 +239,108 @@ export function SettingsPage() {
           )}
 
           {/* Save button */}
-          <div className="flex justify-end">
-            <button
-              onClick={handleSave}
-              className={cn(
-                'flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-medium transition-all',
-                saved
-                  ? 'bg-[#008080]/20 text-[#008080] border border-[#008080]/30'
-                  : 'bg-brand text-white hover:bg-brand/90'
-              )}
-            >
-              <Save size={14} strokeWidth={2} />
-              {saved ? 'Saved!' : 'Save Changes'}
-            </button>
-          </div>
+          {section !== 'account' && (
+            <div className="flex justify-end">
+              <button
+                onClick={handleSave}
+                className={cn(
+                  'flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-medium transition-all',
+                  saved
+                    ? 'bg-[#008080]/20 text-[#008080] border border-[#008080]/30'
+                    : 'bg-brand text-white hover:bg-brand/90'
+                )}
+              >
+                <Save size={14} strokeWidth={2} />
+                {saved ? 'Saved!' : 'Save Changes'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
+  )
+}
+
+function AccountSection() {
+  const { admin, logout, login } = useAuth()
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  if (!admin) {
+    async function handleSignIn(event: FormEvent<HTMLFormElement>) {
+      event.preventDefault()
+      setError(null)
+      setSubmitting(true)
+      try {
+        await login({ email, password })
+      } catch (requestError) {
+        setError(requestError instanceof Error ? requestError.message : 'Unable to sign in')
+      } finally {
+        setSubmitting(false)
+      }
+    }
+
+    return (
+      <SectionCard title="Account" description="Sign in with your administrator account.">
+        <form onSubmit={handleSignIn} className="max-w-sm space-y-3.5 py-2">
+          <label className="block text-[12px] font-medium text-foreground">
+            Email
+            <input
+              type="email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+            />
+          </label>
+          <label className="block text-[12px] font-medium text-foreground">
+            Password
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              minLength={8}
+              className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+            />
+          </label>
+          {error && <p className="text-[12px] text-status-critical">{error}</p>}
+          <Button type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</Button>
+        </form>
+      </SectionCard>
+    )
+  }
+
+  return (
+    <SectionCard title="Account" description="Your administrator profile for this local installation.">
+      <div className="flex items-center gap-3 py-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
+          <UserCircle size={24} strokeWidth={1.5} />
+        </div>
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-semibold text-foreground">{admin.name}</p>
+          <p className="truncate text-[12px] text-muted-foreground">{admin.email}</p>
+        </div>
+      </div>
+
+      <SettingRow label="Status" description="Current session for this browser.">
+        <span className="text-[12px] font-medium text-status-good">Signed in</span>
+      </SettingRow>
+      <SettingRow label="Last login" description="Most recent successful sign-in.">
+        <span className="text-[12px] text-muted-foreground">{admin.last_login ? new Date(admin.last_login).toLocaleString() : '—'}</span>
+      </SettingRow>
+
+      <div className="pt-3">
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 rounded-md border border-status-critical/30 bg-status-criticalBg/40 px-3 py-1.5 text-[13px] font-medium text-status-critical transition-colors hover:bg-status-criticalBg/60"
+        >
+          <LogOut size={14} strokeWidth={2} />
+          Sign out
+        </button>
+      </div>
+    </SectionCard>
   )
 }

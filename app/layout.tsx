@@ -2,6 +2,7 @@ import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import Script from 'next/script'
 import { Inter, JetBrains_Mono } from 'next/font/google'
+import { AuthProvider } from '@/lib/auth-provider'
 import { ThemeProvider } from '@/lib/theme-provider'
 import './globals.css'
 
@@ -67,9 +68,11 @@ export default function RootLayout({
             `,
           }}
         />
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
+        <AuthProvider>
+          <ThemeProvider>
+            {children}
+          </ThemeProvider>
+        </AuthProvider>
         {process.env.NODE_ENV === 'production' && <Analytics />}
       </body>
     </html>
