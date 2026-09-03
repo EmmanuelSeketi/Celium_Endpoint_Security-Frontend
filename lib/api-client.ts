@@ -38,7 +38,7 @@ export type ManagedDevice = {
   created_at: string
 }
 
-export type ComplianceSummary = {
+export type PostureSummary = {
   total_devices: number
   active_devices: number
   compliant_count: number
@@ -46,7 +46,7 @@ export type ComplianceSummary = {
   error_count: number
 }
 
-export type ComplianceCheck = {
+export type SecurityCheck = {
   id: string
   check_id: string
   category: string
@@ -124,13 +124,13 @@ export async function getDevices() {
   return result.data
 }
 
-export async function getComplianceSummary() {
-  const result = await authenticatedRequest<ApiSuccess<ComplianceSummary>>('/compliance/summary')
+export async function getPostureSummary() {
+  const result = await authenticatedRequest<ApiSuccess<PostureSummary>>('/security/summary')
   return result.data
 }
 
-export async function getComplianceChecks() {
-  const result = await authenticatedRequest<ApiSuccess<ComplianceCheck[]>>('/compliance/checks')
+export async function getSecurityChecks() {
+  const result = await authenticatedRequest<ApiSuccess<SecurityCheck[]>>('/security/checks')
   return result.data
 }
 
@@ -138,3 +138,4 @@ export async function getAlerts() {
   const result = await authenticatedRequest<ApiSuccess<Alert[]>>('/alerts')
   return result.data
 }
+

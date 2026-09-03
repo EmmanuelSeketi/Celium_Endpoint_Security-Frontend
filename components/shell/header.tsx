@@ -8,6 +8,8 @@ import {
   Sun,
 } from 'lucide-react'
 import { Alert, getAlerts } from '@/lib/api-client'
+import { alerts as demoAlerts } from '@/lib/mock-data'
+import { useDataMode } from '@/lib/data-mode-provider'
 import { StatusDot } from '@/components/ui/status-badge'
 import { useTheme } from '@/lib/theme-provider'
 
@@ -15,16 +17,30 @@ const DATE_PRESETS = ['Last 24h', 'Last 7 days', 'Last 30 days', 'Last 90 days']
 
 export function Header() {
   const { theme, toggleTheme } = useTheme()
+  const { mode, toggleMode } = useDataMode()
   const [dateRange, setDateRange] = useState('Last 7 days')
   const [dateOpen, setDateOpen] = useState(false)
   const [notiOpen, setNotiOpen] = useState(false)
   const [liveAlerts, setLiveAlerts] = useState<Alert[]>([])
 
   useEffect(() => {
+    if (mode === 'demo') {
+      setLiveAlerts(demoAlerts.map(alert => ({
+        id: alert.id,
+        title: alert.message,
+        message: alert.message,
+        severity: alert.severity,
+        status: 'active',
+        alert_type: 'compliance_failure',
+        created_at: alert.timestamp,
+      })))
+      return
+    }
+
     getAlerts()
       .then(next => setLiveAlerts(Array.isArray(next) ? next : []))
       .catch(() => setLiveAlerts([]))
-  }, [])
+  }, [mode])
 
   const criticalAlerts = liveAlerts.filter(a => a.severity === 'critical' && a.status === 'active')
   const unreadCount = criticalAlerts.length
@@ -50,6 +66,14 @@ export function Header() {
       </div>
 
       <div className="flex-1" />
+
+      <button
+        onClick={toggleMode}
+        className="h-8 rounded-full border border-border px-3 text-[12px] font-medium text-foreground transition-colors hover:bg-surface-hover"
+        title="Switch between demo data and live API data"
+      >
+        {mode === 'demo' ? 'Demo data' : 'API data'}
+      </button>
 
       {/* Date Range */}
       <div className="relative">

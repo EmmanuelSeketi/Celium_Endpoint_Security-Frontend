@@ -5,12 +5,14 @@ import Link from 'next/link'
 import { formatDistanceToNow } from 'date-fns'
 import { ArrowRight, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { alerts as demoAlerts, devices as demoDevices, complianceChecks as demoChecks, getFleetStats } from '@/lib/mock-data'
 import { getCategoryLabel } from '@/lib/theme'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
 import { OSComplianceBarChart, FailingChecksPieChart, RiskHeatmap } from '@/components/ui/charts'
-import { Alert, ComplianceCheck, ComplianceSummary, ManagedDevice, getAlerts, getComplianceChecks, getComplianceSummary, getDevices } from '@/lib/api-client'
+import { Alert, SecurityCheck, PostureSummary, ManagedDevice, getAlerts, getSecurityChecks, getPostureSummary, getDevices } from '@/lib/api-client'
+import { useDataMode } from '@/lib/data-mode-provider'
 
 function OSIcon({ os, className }: { os: string; className?: string }) {
   if (os === 'Windows') {
@@ -37,17 +39,16 @@ function OSIcon({ os, className }: { os: string; className?: string }) {
 }
 
 export function OverviewPage() {
-  const [summary, setSummary] = useState<ComplianceSummary>({ total_devices: 0, active_devices: 0, compliant_count: 0, non_compliant: 0, error_count: 0 })
+  const { mode } = useDataMode()
+  const overviewDemoMode = mode === 'demo'
+  const [summary, setSummary] = useState<PostureSummary>({ total_devices: 0, active_devices: 0, compliant_count: 0, non_compliant: 0, error_count: 0 })
   const [liveDevices, setLiveDevices] = useState<ManagedDevice[]>([])
   const [liveAlerts, setLiveAlerts] = useState<Alert[]>([])
-  const [liveChecks, setLiveChecks] = useState<ComplianceCheck[]>([])
-  const totalDevices = summary.total_devices
-  const activeDevices = summary.active_devices
-  const devicesNeedingAttention = summary.non_compliant
-  const errors = summary.error_count
-
+  const [liveChecks, setLiveChecks] = useState<SecurityCheck[]>([])
   useEffect(() => {
-    Promise.all([getComplianceSummary(), getDevices(), getAlerts(), getComplianceChecks()])
+    if (overviewDemoMode) return
+
+    Promise.all([getPostureSummary(), getDevices(), getAlerts(), getSecurityChecks()])
       .then(([nextSummary, nextDevices, nextAlerts, nextChecks]) => {
         setSummary(nextSummary)
         setLiveDevices(Array.isArray(nextDevices) ? nextDevices : [])
@@ -55,15 +56,83 @@ export function OverviewPage() {
         setLiveChecks(Array.isArray(nextChecks) ? nextChecks : [])
       })
       .catch(() => undefined)
-  }, [])
+  }, [overviewDemoMode])
+
+  const demoStats = getFleetStats()
+  const displaySummary = overviewDemoMode
+    ? {
+        total_devices: demoDevices.length,
+        active_devices: demoStats.compliant,
+        compliant_count: demoStats.compliant,
+        non_compliant: demoStats.warning,
+        error_count: demoStats.critical,
+      }
+    : summary
+  const displayDevices = overviewDemoMode ? demoDevices.map(device => ({
+    id: device.id,
+    device_id: device.id,
+    hostname: device.name,
+    os: device.os === 'Mac' ? 'macos' : device.os.toLowerCase() as ManagedDevice['os'],
+    os_version: device.osVersion,
+    ip_address: device.ip,
+    status: device.status === 'compliant' ? 'active' : device.status === 'critical' ? 'error' : 'inactive' as ManagedDevice['status'],
+    last_checkin: device.lastSeen,
+    created_at: device.lastSeen,
+  })) : liveDevices
+  const displayAlerts = overviewDemoMode ? demoAlerts.map(alert => ({
+    id: alert.id,
+    title: alert.message,
+    message: alert.message,
+    severity: alert.severity,
+    status: 'active' as const,
+    alert_type: 'compliance_failure',
+    created_at: alert.timestamp,
+  })) : liveAlerts
+  const displayChecks = overviewDemoMode ? demoChecks.map(check => ({
+    id: check.id,
+    check_id: check.id,
+    category: check.category,
+    title: check.name,
+    description: check.description,
+    is_active: true,
+  })) : liveChecks
+  const totalDevices = displaySummary.total_devices
+  const activeDevices = displaySummary.active_devices
+  const devicesNeedingAttention = displaySummary.non_compliant
+  const errors = displaySummary.error_count
+  const stats = overviewDemoMode ? demoStats : {
+    avgScore: 0,
+    compliant: displaySummary.compliant_count,
+    warning: displaySummary.non_compliant,
+    critical: displaySummary.error_count,
+    needingAttention: displaySummary.non_compliant,
+    byOS: { Windows: { avg: 0 }, Mac: { avg: 0 }, Linux: { avg: 0 } },
+    rtpCoverage: 0,
+    defCompliance: 0,
+    activeDetections: 0,
+    patchCompliance: 0,
+    missingCriticalTotal: 0,
+    pendingReboot: 0,
+  }
+  const averageFleetHealth = overviewDemoMode ? stats.avgScore : 0
+  const healthLabel = averageFleetHealth >= 80 ? 'Healthy' : averageFleetHealth >= 60 ? 'Warning' : averageFleetHealth > 0 ? 'Critical' : 'No compliance data'
+  const healthColor = healthLabel === 'Healthy'
+    ? 'var(--category-1)'
+    : healthLabel === 'Warning'
+      ? 'var(--status-warning)'
+      : healthLabel === 'Critical'
+        ? 'var(--status-critical)'
+        : 'var(--muted-foreground)'
 
   const osByScore = [
-    { os: 'Windows', score: 0 },
-    { os: 'macOS', score: 0 },
-    { os: 'Linux', score: 0 },
+    { os: 'Windows', score: overviewDemoMode ? stats.byOS.Windows.avg : 0 },
+    { os: 'macOS', score: overviewDemoMode ? stats.byOS.Mac.avg : 0 },
+    { os: 'Linux', score: overviewDemoMode ? stats.byOS.Linux.avg : 0 },
   ]
 
-  const topFailingChecks = liveChecks.slice(0, 5).map(check => ({ name: check.title, value: 0 }))
+  const topFailingChecks = overviewDemoMode
+    ? demoChecks.slice(0, 5).map(check => ({ name: check.name, value: check.failingDeviceCount }))
+    : displayChecks.slice(0, 5).map(check => ({ name: check.title, value: 0 }))
 
   // Risk heatmap: departments × category
   const departments = ['Engineering', 'Finance', 'Sales', 'HR', 'IT', 'Marketing', 'Design']
@@ -80,39 +149,50 @@ export function OverviewPage() {
       {/* KPI Row */}
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
         <KpiCard
-          label="Active Devices"
-          value={`${activeDevices}/${totalDevices}`}
-          accentColor="var(--category-1)"
+          label="Average Fleet Health"
+          value={`${averageFleetHealth}%`}
+          accentColor={healthColor}
           description={
             <span className="inline-flex items-center gap-1.5">
-              <span className="relative flex h-3 w-3 shrink-0">
-                <span className="absolute inline-flex h-full w-full rounded-full bg-[var(--category-1)] opacity-75 animate-ping" />
-                <span className="relative inline-flex h-3 w-3 rounded-full bg-[var(--category-1)]" />
-              </span>
-              Reporting
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: healthColor }} />
+              {healthLabel}
             </span>
           }
         />
 
         <KpiCard
           label="Total Devices"
+          childrenClassName="mt-0"
         >
-          <FailingChecksPieChart
-            data={[
-              { name: 'Healthy', value: summary.compliant_count },
-              { name: 'Warning', value: summary.non_compliant },
-              { name: 'Critical', value: summary.error_count },
-            ]}
-            height={96}
-            showArcLabels={false}
-            showTotal
-            totalOverride={totalDevices}
-            colors={['var(--category-1)', 'var(--status-warning)', 'var(--status-critical)']}
-          />
+          <div className="flex items-start justify-between gap-4">
+            <span className="text-[30px] font-semibold leading-none tabular-nums text-black dark:text-white">
+              {totalDevices}
+            </span>
+            <div className="flex w-[54%] min-w-0 flex-col gap-2 pt-1 text-[12px] font-medium text-black dark:text-white">
+              {[
+                { label: 'Healthy', count: displaySummary.compliant_count, color: 'bg-[var(--category-1)]' },
+                { label: 'Warning', count: displaySummary.non_compliant, color: 'bg-status-warning' },
+                { label: 'Critical', count: displaySummary.error_count, color: 'bg-status-critical' },
+              ].map(item => (
+                <div key={item.label} className="min-w-0">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <span>{item.label}</span>
+                    <span className="font-mono">{item.count}</span>
+                  </div>
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                    <div
+                      className={`h-full rounded-full ${item.color}`}
+                      style={{ width: `${Math.max((item.count / Math.max(totalDevices, 1)) * 100, item.count > 0 ? 8 : 0)}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </KpiCard>
 
         <KpiCard
-          label="Devices Needing Attention"
+          label="Needing Attention"
           childrenClassName="mt-0"
         >
           <div className="flex items-start justify-between gap-4">
@@ -139,9 +219,9 @@ export function OverviewPage() {
         </KpiCard>
 
         <KpiCard
-          label="Avg MTTR"
-          value="0h"
-          description="No remediation data"
+          label="Active Devices"
+          value={`${activeDevices}/${totalDevices}`}
+          description="Reporting to the local service"
         />
       </div>
 
@@ -153,9 +233,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Active Directory</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Domain Controllers</span><span className="text-black dark:text-white tabular-nums">healthy (0/0)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Failed logons (24h)</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Stale accounts</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Domain Controllers</span><span className="text-black dark:text-white tabular-nums">0/0 healthy</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Failed logons (24h)</span><span className="text-black dark:text-white tabular-nums">0</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Stale accounts</span><span className="text-black dark:text-white tabular-nums">0</span></div>
               </div>
             </div>
           </Link>
@@ -164,9 +244,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Malware Protection</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">(0%)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">(0%)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Active detections</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Active detections</span><span className="text-black dark:text-white tabular-nums">0</span></div>
               </div>
             </div>
           </Link>
@@ -175,9 +255,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Patch Compliance</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">(0%)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Pending reboot</span><span className="text-black dark:text-white tabular-nums">(0)</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">0</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Pending reboot</span><span className="text-black dark:text-white tabular-nums">0</span></div>
               </div>
             </div>
           </Link>
@@ -197,7 +277,7 @@ export function OverviewPage() {
             }
             noPadding
           >
-            {liveAlerts.length === 0 ? (
+            {displayAlerts.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-10 gap-2">
                 <AlertCircle size={20} className="text-muted-foreground" strokeWidth={1.5} />
                 <p className="text-[12px] text-muted-foreground">No alerts in the selected range</p>
@@ -213,7 +293,7 @@ export function OverviewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {liveAlerts.slice(0, 4).map(alert => (
+                    {displayAlerts.slice(0, 4).map(alert => (
                       <tr key={alert.id} className="h-10 border-b border-border font-medium last:border-b-0 hover:bg-surface-hover transition-colors">
                         <td className="max-w-0 px-4 py-2">
                           <span className="block truncate text-foreground" title={alert.message}>{alert.message}</span>
@@ -244,7 +324,7 @@ export function OverviewPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {liveDevices.slice(0, 4).map(device => (
+                    {displayDevices.slice(0, 4).map(device => (
                     <tr key={device.id} className="h-10 border-b border-border last:border-b-0 hover:bg-surface-hover transition-colors">
                       <td className="max-w-0 px-4 py-2">
                         <span className="block truncate font-mono" title={device.hostname}>{device.hostname}</span>
@@ -266,7 +346,7 @@ export function OverviewPage() {
         {/* Right Column */}
         <div className="contents">
           {/* Compliance by OS */}
-          <SectionCard title="Compliance by OS" titleClassName="text-[13px] text-black dark:text-white" className="order-1 h-full">
+          <SectionCard title="Average Compliance Score by OS" description="Average percentage across devices in each operating system." titleClassName="text-[13px] text-black dark:text-white" className="order-1 h-full">
             <OSComplianceBarChart data={osByScore} height={180} />
           </SectionCard>
 
@@ -331,7 +411,7 @@ export function OverviewPage() {
             </tr>
           </thead>
           <tbody>
-            {liveDevices.slice(0, 10).map(d => (
+            {displayDevices.slice(0, 10).map(d => (
               <tr
                 key={d.id}
                 className="border-b border-border h-10 hover:bg-surface-hover transition-colors"
@@ -367,7 +447,7 @@ export function OverviewPage() {
         </table>
         <div className="px-3 py-2 border-t border-border flex items-center justify-between">
           <p className="text-[12px] text-muted-foreground">
-            Showing {liveDevices.length === 0 ? 0 : 1}–{Math.min(liveDevices.length, 10)} of {liveDevices.length} devices
+            Showing {displayDevices.length === 0 ? 0 : 1}–{Math.min(displayDevices.length, 10)} of {displayDevices.length} devices
           </p>
         </div>
       </SectionCard>
