@@ -16,16 +16,21 @@ const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
 const DEPT_OPTIONS = [...new Set(allDevices.map(d => d.department))].sort()
 const PAGE_SIZE = 10
 
-// --- Shared severity system -------------------------------------------------
-// One palette, applied identically to Status, Score, Checks, and Last Seen,
-// so a Critical row reads as Critical everywhere instead of four different
-// ad hoc color decisions per row.
+// --- Shared health and reporting status system -----------------------------
 type Severity = 'compliant' | 'warning' | 'critical'
+type ReportingStatus = 'online' | 'stale' | 'offline' | 'disconnected'
 
 const SEVERITY: Record<Severity, { dot: string; label: string }> = {
   compliant: { dot: 'var(--category-1)', label: 'Healthy' },
   warning: { dot: STATUS_COLORS.warning, label: 'Warning' },
   critical: { dot: STATUS_COLORS.critical, label: 'Critical' },
+}
+
+const REPORTING_STATUS: Record<ReportingStatus, { dot: string; label: string }> = {
+  online: { dot: 'var(--status-good)', label: 'Online' },
+  stale: { dot: 'var(--status-warning)', label: 'Stale' },
+  offline: { dot: 'var(--status-unknown)', label: 'Offline' },
+  disconnected: { dot: 'var(--status-critical)', label: 'Disconnected' },
 }
 
 // Status text stays neutral in every state — only the dot carries color.
@@ -37,11 +42,12 @@ function scoreToSeverity(score: number): Severity {
   return 'critical'
 }
 
-function lastSeenSeverity(dateStr: string): Severity {
+function getReportingStatus(dateStr: string): ReportingStatus {
   const hoursAgo = (Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60)
-  if (hoursAgo < 24) return 'compliant'
-  if (hoursAgo <= 24 * 7) return 'warning'
-  return 'critical'
+  if (hoursAgo <= 1) return 'online'
+  if (hoursAgo <= 24) return 'stale'
+  if (hoursAgo <= 24 * 7) return 'offline'
+  return 'disconnected'
 }
 
 function StatusIndicator({ status, className, showDot = true }: { status: DeviceStatus; className?: string; showDot?: boolean }) {
@@ -52,6 +58,16 @@ function StatusIndicator({ status, className, showDot = true }: { status: Device
       <span className="text-[12px] font-medium capitalize text-black dark:text-white">
         {s.label}
       </span>
+    </span>
+  )
+}
+
+function ReportingStatusIndicator({ lastSeen, className }: { lastSeen: string; className?: string }) {
+  const status = REPORTING_STATUS[getReportingStatus(lastSeen)]
+  return (
+    <span className={cn('inline-flex items-center gap-1.5', className)}>
+      <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: status.dot }} />
+      <span className="text-[12px] font-medium text-black dark:text-white">{status.label}</span>
     </span>
   )
 }
@@ -111,6 +127,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
               <Laptop size={15} strokeWidth={1.5} className="text-black dark:text-white" />
               <span className="font-mono text-[15px] font-semibold text-black dark:text-white">{device.name}</span>
               <StatusIndicator status={device.status} />
+              <ReportingStatusIndicator lastSeen={device.lastSeen} />
             </div>
             <div className="flex items-center gap-3 text-[11px] font-mono text-black dark:text-white">
               <span>{device.osVersion}</span>
@@ -379,13 +396,13 @@ export function DevicesPage() {
               onClick={() => { setStatusOpen(!statusOpen); setOsOpen(false); setDeptOpen(false) }}
               className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
             >
-              Status {statusFilter ? <span className="text-brand font-medium">· {statusFilter}</span> : ''}
+              Health {statusFilter ? <span className="text-brand font-medium">· {statusFilter}</span> : ''}
               <ChevronDown size={12} strokeWidth={2} />
             </button>
             {statusOpen && (
               <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
                 <button onClick={() => { setStatusFilter(''); setPage(1); setStatusOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
-                  All Statuses
+                  All Health States
                 </button>
                 {STATUS_OPTIONS.map(s => (
                   <button key={s} onClick={() => { setStatusFilter(s); setPage(1); setStatusOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors capitalize', statusFilter === s && 'font-medium')}>
@@ -448,13 +465,12 @@ export function DevicesPage() {
         <SectionCard noPadding>
           <table className="w-full table-fixed text-[12px]">
             <colgroup>
-              <col className="w-[18%]" />
-              <col className="w-[13%]" />
-              <col className="w-[12%]" />
-              <col className="w-[8%]" />
-              <col className="w-[18%]" />
+              <col className="w-[22%]" />
               <col className="w-[16%]" />
               <col className="w-[15%]" />
+              <col className="w-[16%]" />
+              <col className="w-[15%]" />
+              <col className="w-[16%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-border">
@@ -462,12 +478,11 @@ export function DevicesPage() {
                   { label: 'Device', align: 'left', sortable: false },
                   { label: 'OS', align: 'left', sortable: false },
                   { label: 'IP', align: 'left', sortable: false },
-                  { label: 'Score', align: 'right', sortable: false },
-                  { label: 'Checks', align: 'right', sortable: false },
+                  { label: 'Health', align: 'left', sortable: false },
                   { label: 'Status', align: 'left', sortable: false },
                   { label: 'Last Seen', align: 'left', sortable: false },
                 ].map(h => (
-                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Checks' && 'pr-8', h.label === 'Status' && 'pl-8')}>
+                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Status' && 'pl-8')}>
                     {h.label}
                   </th>
                 ))}
@@ -476,7 +491,7 @@ export function DevicesPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center">
+                  <td colSpan={6} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Laptop size={20} strokeWidth={1.5} className="text-muted-foreground" />
                       <p className="text-[13px] text-muted-foreground">No devices match the current filters.</p>
@@ -500,17 +515,11 @@ export function DevicesPage() {
                       </div>
                     </td>
                     <td className="px-3"><span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.ip}</span></td>
-                    <td className="px-3 align-middle text-right">
-                      <span className="inline-block text-[12px] font-semibold leading-none tabular-nums text-black dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {d.complianceScore}%
-                      </span>
-                    </td>
-                    <td className="px-3 pr-8 text-right align-middle">
-                      <span className="font-mono text-[12px] font-semibold text-black dark:text-white">{d.failedChecks}</span>
-                      <span className="font-mono text-[12px] font-medium text-black dark:text-white"> / {d.failedChecks + d.passedChecks}</span>
+                    <td className="px-3 align-middle">
+                      <StatusIndicator status={scoreToSeverity(d.complianceScore)} className="gap-1.5" />
                     </td>
                     <td className="px-3 pl-8">
-                      <span className="text-[12px] font-semibold text-foreground">{d.status === 'compliant' ? 'Healthy' : d.status.charAt(0).toUpperCase() + d.status.slice(1)}</span>
+                      <ReportingStatusIndicator lastSeen={d.lastSeen} />
                     </td>
                     <td className="px-3"><span className="text-[12px] font-medium text-black dark:text-white">{formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}</span></td>
                   </tr>

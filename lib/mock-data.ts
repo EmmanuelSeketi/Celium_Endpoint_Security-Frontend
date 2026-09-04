@@ -11,7 +11,7 @@ import type {
 } from './types'
 
 // ─── Devices ──────────────────────────────────────────────────────────────────
-const now = new Date('2026-07-31T10:00:00Z')
+const now = new Date()
 
 function daysAgo(d: number): string {
   const dt = new Date(now)
