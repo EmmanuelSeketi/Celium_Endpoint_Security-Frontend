@@ -1,13 +1,21 @@
 export type OS = 'Windows' | 'Mac' | 'Linux'
 export type DeviceStatus = 'compliant' | 'warning' | 'critical'
+export type DeviceAssetType = 'dc_server' | 'laptop' | 'workstation'
 export type Severity = 'info' | 'warning' | 'critical'
 export type CheckCategory = 'active_directory' | 'malware_protection' | 'os_updates' | 'other'
 
 export interface MalwareStatus {
   engineVersion: string
+  securityIntelligenceVersion?: string
+  securityIntelligenceCreatedAt?: string
+  securityIntelligenceUpdatedAt?: string
   definitionAge: number // days
   realtimeProtection: boolean
   lastScanResult: 'clean' | 'threats_found' | 'scan_failed'
+  lastScanAt?: string
+  lastScanType?: 'quick' | 'full' | 'custom'
+  lastScanDurationSeconds?: number
+  lastScanFiles?: number
   tamperProtection: boolean
   quarantineCount: number
 }
@@ -24,6 +32,7 @@ export interface PatchStatus {
 export interface Device {
   id: string
   name: string
+  assetType: DeviceAssetType
   os: OS
   osVersion: string
   department: string
@@ -74,6 +83,37 @@ export interface KerberosAnomaly {
   severity: Severity
 }
 
+export type ADAccountType = 'user' | 'service' | 'computer'
+
+export interface ADAccountRecord {
+  id: string
+  accountName: string
+  displayName?: string
+  accountType: ADAccountType
+  organizationalUnit: string
+  enabled: boolean
+  lastLogon: string
+  passwordLastSet?: string
+  passwordNeverExpires: boolean
+  distinguishedName: string
+  sourceDomainController: string
+  stale: boolean
+}
+
+export interface KerberosEventRecord {
+  id: string
+  eventId: 4768 | 4769 | 4771 | 4776
+  activity: 'ticket_requested' | 'service_ticket_requested' | 'pre_authentication_failed' | 'credential_validation'
+  account: string
+  servicePrincipalName?: string
+  clientHost: string
+  clientIp: string
+  sourceDomainController: string
+  timestamp: string
+  severity: Severity
+  detectionReason?: string
+}
+
 export interface ADDomainStatus {
   domainControllers: DomainController[]
   failedLogons24h: number
@@ -81,6 +121,8 @@ export interface ADDomainStatus {
   privilegedGroupChanges: PrivilegedGroupChange[]
   kerberosAnomalies: KerberosAnomaly[]
   staleAccounts: number
+  staleAccountRecords: ADAccountRecord[]
+  kerberosEvents: KerberosEventRecord[]
 }
 
 export interface Alert {

@@ -8,6 +8,8 @@ import type {
   Detection,
   QuarantineItem,
   ReportTemplate,
+  ADAccountRecord,
+  KerberosEventRecord,
 } from './types'
 
 // ─── Devices ──────────────────────────────────────────────────────────────────
@@ -31,7 +33,7 @@ function minutesAgo(m: number): string {
 
 export const devices: Device[] = [
   {
-    id: 'dev-001', name: 'NYC-LT-0142', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-001', name: 'NYC-LT-0142', assetType: 'laptop', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'Engineering', ip: '10.0.1.42', mac: '3C:22:FB:4A:1D:88',
     username: 'j.chen', complianceScore: 94, status: 'compliant', failedChecks: 2, passedChecks: 28,
     lastSeen: minutesAgo(3), lastScanned: hoursAgo(1), domainJoined: true,
@@ -39,7 +41,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 1, pendingReboot: false, lastUpdateCheck: hoursAgo(2), osEol: false },
   },
   {
-    id: 'dev-002', name: 'NYC-LT-0087', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-002', name: 'NYC-LT-0087', assetType: 'laptop', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'Finance', ip: '10.0.1.87', mac: '00:1A:2B:3C:4D:5E',
     username: 'a.patel', complianceScore: 71, status: 'warning', failedChecks: 7, passedChecks: 23,
     lastSeen: minutesAgo(15), lastScanned: hoursAgo(3), domainJoined: true,
@@ -47,7 +49,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 2, missingTotal: 5, pendingReboot: true, lastUpdateCheck: hoursAgo(6), osEol: false },
   },
   {
-    id: 'dev-003', name: 'NYC-SRV-0012', os: 'Windows', osVersion: 'Windows Server 2022 (20348.2340)',
+    id: 'dev-003', name: 'NYC-SRV-0012', assetType: 'dc_server', os: 'Windows', osVersion: 'Windows Server 2022 (20348.2340)',
     department: 'IT', ip: '10.0.1.12', mac: 'A4:BB:6D:09:F3:22',
     username: 'svc.backup', complianceScore: 88, status: 'compliant', failedChecks: 3, passedChecks: 27,
     lastSeen: minutesAgo(1), lastScanned: hoursAgo(2), domainJoined: true,
@@ -55,7 +57,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 2, pendingReboot: false, lastUpdateCheck: hoursAgo(1), osEol: false },
   },
   {
-    id: 'dev-004', name: 'NYC-MBP-0034', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
+    id: 'dev-004', name: 'NYC-MBP-0034', assetType: 'laptop', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
     department: 'Design', ip: '10.0.1.34', mac: 'F8:FF:C2:1A:8B:D0',
     username: 'l.torres', complianceScore: 97, status: 'compliant', failedChecks: 1, passedChecks: 29,
     lastSeen: minutesAgo(5), lastScanned: hoursAgo(1), domainJoined: false,
@@ -63,7 +65,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 0, pendingReboot: false, lastUpdateCheck: hoursAgo(4), osEol: false },
   },
   {
-    id: 'dev-005', name: 'NYC-LT-0201', os: 'Windows', osVersion: 'Windows 10 22H2 (19045.4355)',
+    id: 'dev-005', name: 'NYC-LT-0201', assetType: 'laptop', os: 'Windows', osVersion: 'Windows 10 22H2 (19045.4355)',
     department: 'Sales', ip: '10.0.1.201', mac: 'DC:A6:32:9E:5F:11',
     username: 'm.kim', complianceScore: 42, status: 'critical', failedChecks: 16, passedChecks: 14,
     lastSeen: hoursAgo(2), lastScanned: hoursAgo(8), domainJoined: true,
@@ -71,7 +73,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 5, missingTotal: 11, pendingReboot: true, lastUpdateCheck: daysAgo(3), osEol: false },
   },
   {
-    id: 'dev-006', name: 'NYC-LX-0055', os: 'Linux', osVersion: 'Ubuntu 22.04.4 LTS',
+    id: 'dev-006', name: 'NYC-LX-0055', assetType: 'workstation', os: 'Linux', osVersion: 'Ubuntu 22.04.4 LTS',
     department: 'Engineering', ip: '10.0.1.55', mac: '52:54:00:AB:CD:EF',
     username: 'r.sharma', complianceScore: 83, status: 'compliant', failedChecks: 4, passedChecks: 26,
     lastSeen: minutesAgo(8), lastScanned: hoursAgo(2), domainJoined: false,
@@ -79,7 +81,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 1, missingTotal: 3, pendingReboot: false, lastUpdateCheck: hoursAgo(3), osEol: false },
   },
   {
-    id: 'dev-007', name: 'NYC-LT-0301', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-007', name: 'NYC-LT-0301', assetType: 'laptop', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'HR', ip: '10.0.1.148', mac: '00:50:56:88:22:3C',
     username: 'p.nguyen', complianceScore: 78, status: 'warning', failedChecks: 6, passedChecks: 24,
     lastSeen: minutesAgo(22), lastScanned: hoursAgo(4), domainJoined: true,
@@ -87,7 +89,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 1, missingTotal: 4, pendingReboot: true, lastUpdateCheck: hoursAgo(5), osEol: false },
   },
   {
-    id: 'dev-008', name: 'NYC-MBP-0098', os: 'Mac', osVersion: 'macOS 13.6.7 (Ventura)',
+    id: 'dev-008', name: 'NYC-MBP-0098', assetType: 'laptop', os: 'Mac', osVersion: 'macOS 13.6.7 (Ventura)',
     department: 'Marketing', ip: '10.0.1.98', mac: '3C:06:30:44:A2:BB',
     username: 'e.davis', complianceScore: 66, status: 'warning', failedChecks: 9, passedChecks: 21,
     lastSeen: minutesAgo(45), lastScanned: hoursAgo(6), domainJoined: false,
@@ -95,7 +97,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 2, missingTotal: 6, pendingReboot: false, lastUpdateCheck: daysAgo(1), osEol: false },
   },
   {
-    id: 'dev-009', name: 'SF-WKS-0087', os: 'Windows', osVersion: 'Windows 11 22H2 (22621.3155)',
+    id: 'dev-009', name: 'SF-WKS-0087', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 11 22H2 (22621.3155)',
     department: 'Operations', ip: '10.1.0.87', mac: 'B0:25:AA:55:C3:D1',
     username: 's.wilson', complianceScore: 55, status: 'warning', failedChecks: 12, passedChecks: 18,
     lastSeen: minutesAgo(30), lastScanned: hoursAgo(5), domainJoined: true,
@@ -103,7 +105,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 3, missingTotal: 8, pendingReboot: false, lastUpdateCheck: daysAgo(2), osEol: false },
   },
   {
-    id: 'dev-010', name: 'SF-WKS-0104', os: 'Windows', osVersion: 'Windows 10 21H2 (19044.4046)',
+    id: 'dev-010', name: 'SF-WKS-0104', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 10 21H2 (19044.4046)',
     department: 'Finance', ip: '10.1.0.104', mac: '00:D8:61:89:2A:F4',
     username: 't.martin', complianceScore: 38, status: 'critical', failedChecks: 18, passedChecks: 12,
     lastSeen: hoursAgo(4), lastScanned: hoursAgo(12), domainJoined: true,
@@ -111,7 +113,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 6, missingTotal: 14, pendingReboot: true, lastUpdateCheck: daysAgo(5), osEol: true, eolDate: '2025-10-14' },
   },
   {
-    id: 'dev-011', name: 'SF-MBP-0022', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
+    id: 'dev-011', name: 'SF-MBP-0022', assetType: 'laptop', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
     department: 'Engineering', ip: '10.1.0.22', mac: 'AC:DE:48:00:11:22',
     username: 'k.anderson', complianceScore: 92, status: 'compliant', failedChecks: 2, passedChecks: 28,
     lastSeen: minutesAgo(7), lastScanned: hoursAgo(1), domainJoined: false,
@@ -119,7 +121,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 1, pendingReboot: false, lastUpdateCheck: hoursAgo(2), osEol: false },
   },
   {
-    id: 'dev-012', name: 'SF-LX-0031', os: 'Linux', osVersion: 'Ubuntu 20.04.6 LTS',
+    id: 'dev-012', name: 'SF-LX-0031', assetType: 'workstation', os: 'Linux', osVersion: 'Ubuntu 20.04.6 LTS',
     department: 'IT', ip: '10.1.0.31', mac: '00:11:32:44:55:66',
     username: 'devops', complianceScore: 74, status: 'warning', failedChecks: 7, passedChecks: 23,
     lastSeen: minutesAgo(12), lastScanned: hoursAgo(3), domainJoined: false,
@@ -127,7 +129,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 1, missingTotal: 5, pendingReboot: false, lastUpdateCheck: hoursAgo(4), osEol: true, eolDate: '2025-04-02' },
   },
   {
-    id: 'dev-013', name: 'SF-SRV-0003', os: 'Linux', osVersion: 'Ubuntu 22.04.4 LTS',
+    id: 'dev-013', name: 'SF-SRV-0003', assetType: 'workstation', os: 'Linux', osVersion: 'Ubuntu 22.04.4 LTS',
     department: 'IT', ip: '10.1.0.3', mac: '08:00:27:FF:EE:DD',
     username: 'svc.web', complianceScore: 85, status: 'compliant', failedChecks: 4, passedChecks: 26,
     lastSeen: minutesAgo(2), lastScanned: hoursAgo(1), domainJoined: false,
@@ -135,7 +137,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 2, pendingReboot: false, lastUpdateCheck: hoursAgo(2), osEol: false },
   },
   {
-    id: 'dev-014', name: 'SF-WKS-0157', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-014', name: 'SF-WKS-0157', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'Sales', ip: '10.1.0.157', mac: 'CC:2D:E0:81:47:39',
     username: 'n.garcia', complianceScore: 62, status: 'warning', failedChecks: 10, passedChecks: 20,
     lastSeen: minutesAgo(55), lastScanned: hoursAgo(7), domainJoined: true,
@@ -143,7 +145,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 2, missingTotal: 7, pendingReboot: true, lastUpdateCheck: daysAgo(2), osEol: false },
   },
   {
-    id: 'dev-015', name: 'SF-WKS-0199', os: 'Windows', osVersion: 'Windows 10 22H2 (19045.4355)',
+    id: 'dev-015', name: 'SF-WKS-0199', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 10 22H2 (19045.4355)',
     department: 'HR', ip: '10.1.0.199', mac: '1C:1B:0D:E0:88:A2',
     username: 'b.thompson', complianceScore: 47, status: 'critical', failedChecks: 14, passedChecks: 16,
     lastSeen: hoursAgo(3), lastScanned: hoursAgo(9), domainJoined: true,
@@ -151,7 +153,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 4, missingTotal: 10, pendingReboot: true, lastUpdateCheck: daysAgo(4), osEol: false },
   },
   {
-    id: 'dev-016', name: 'NYC-LT-0412', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-016', name: 'NYC-LT-0412', assetType: 'laptop', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'Legal', ip: '10.0.1.200', mac: '4C:79:BA:1F:22:A3',
     username: 'c.white', complianceScore: 81, status: 'compliant', failedChecks: 5, passedChecks: 25,
     lastSeen: minutesAgo(18), lastScanned: hoursAgo(3), domainJoined: true,
@@ -159,7 +161,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 3, pendingReboot: false, lastUpdateCheck: hoursAgo(3), osEol: false },
   },
   {
-    id: 'dev-017', name: 'NYC-SRV-0018', os: 'Windows', osVersion: 'Windows Server 2019 (17763.5696)',
+    id: 'dev-017', name: 'NYC-SRV-0018', assetType: 'dc_server', os: 'Windows', osVersion: 'Windows Server 2019 (17763.5696)',
     department: 'IT', ip: '10.0.1.18', mac: 'D0:67:E5:44:7F:C2',
     username: 'svc.sql', complianceScore: 76, status: 'warning', failedChecks: 7, passedChecks: 23,
     lastSeen: minutesAgo(4), lastScanned: hoursAgo(2), domainJoined: true,
@@ -167,7 +169,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 1, missingTotal: 4, pendingReboot: true, lastUpdateCheck: hoursAgo(2), osEol: false },
   },
   {
-    id: 'dev-018', name: 'NYC-MBP-0045', os: 'Mac', osVersion: 'macOS 12.7.5 (Monterey)',
+    id: 'dev-018', name: 'NYC-MBP-0045', assetType: 'laptop', os: 'Mac', osVersion: 'macOS 12.7.5 (Monterey)',
     department: 'Finance', ip: '10.0.1.45', mac: 'A8:5C:2C:88:11:DD',
     username: 'f.jones', complianceScore: 58, status: 'warning', failedChecks: 11, passedChecks: 19,
     lastSeen: hoursAgo(1), lastScanned: hoursAgo(5), domainJoined: false,
@@ -175,7 +177,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 2, missingTotal: 8, pendingReboot: false, lastUpdateCheck: daysAgo(1), osEol: false },
   },
   {
-    id: 'dev-019', name: 'CHI-WKS-0011', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-019', name: 'CHI-WKS-0011', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'Engineering', ip: '10.2.0.11', mac: '00:1C:42:AB:CD:12',
     username: 'g.brown', complianceScore: 96, status: 'compliant', failedChecks: 1, passedChecks: 29,
     lastSeen: minutesAgo(2), lastScanned: hoursAgo(1), domainJoined: true,
@@ -183,7 +185,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 0, pendingReboot: false, lastUpdateCheck: hoursAgo(1), osEol: false },
   },
   {
-    id: 'dev-020', name: 'CHI-MBP-0007', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
+    id: 'dev-020', name: 'CHI-MBP-0007', assetType: 'laptop', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
     department: 'Product', ip: '10.2.0.7', mac: 'F0:18:98:CC:DD:EE',
     username: 'h.lee', complianceScore: 93, status: 'compliant', failedChecks: 2, passedChecks: 28,
     lastSeen: minutesAgo(9), lastScanned: hoursAgo(2), domainJoined: false,
@@ -191,7 +193,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 1, pendingReboot: false, lastUpdateCheck: hoursAgo(2), osEol: false },
   },
   {
-    id: 'dev-021', name: 'CHI-LX-0023', os: 'Linux', osVersion: 'Debian 12.5 (Bookworm)',
+    id: 'dev-021', name: 'CHI-LX-0023', assetType: 'workstation', os: 'Linux', osVersion: 'Debian 12.5 (Bookworm)',
     department: 'IT', ip: '10.2.0.23', mac: '52:54:00:12:34:56',
     username: 'root', complianceScore: 88, status: 'compliant', failedChecks: 3, passedChecks: 27,
     lastSeen: minutesAgo(6), lastScanned: hoursAgo(1), domainJoined: false,
@@ -199,7 +201,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 2, pendingReboot: false, lastUpdateCheck: hoursAgo(3), osEol: false },
   },
   {
-    id: 'dev-022', name: 'CHI-WKS-0044', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
+    id: 'dev-022', name: 'CHI-WKS-0044', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 11 23H2 (22631.3447)',
     department: 'Sales', ip: '10.2.0.44', mac: '3C:A0:67:BB:22:91',
     username: 'i.clark', complianceScore: 85, status: 'compliant', failedChecks: 4, passedChecks: 26,
     lastSeen: minutesAgo(14), lastScanned: hoursAgo(2), domainJoined: true,
@@ -207,7 +209,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 2, pendingReboot: false, lastUpdateCheck: hoursAgo(2), osEol: false },
   },
   {
-    id: 'dev-023', name: 'CHI-MBP-0019', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
+    id: 'dev-023', name: 'CHI-MBP-0019', assetType: 'laptop', os: 'Mac', osVersion: 'macOS 14.4.1 (Sonoma)',
     department: 'Design', ip: '10.2.0.19', mac: '88:E9:FE:3D:AA:55',
     username: 'j.murphy', complianceScore: 91, status: 'compliant', failedChecks: 2, passedChecks: 28,
     lastSeen: minutesAgo(20), lastScanned: hoursAgo(2), domainJoined: false,
@@ -215,7 +217,7 @@ export const devices: Device[] = [
     patchStatus: { missingCritical: 0, missingTotal: 0, pendingReboot: false, lastUpdateCheck: hoursAgo(4), osEol: false },
   },
   {
-    id: 'dev-024', name: 'CHI-WKS-0078', os: 'Windows', osVersion: 'Windows 10 22H2 (19045.4355)',
+    id: 'dev-024', name: 'CHI-WKS-0078', assetType: 'workstation', os: 'Windows', osVersion: 'Windows 10 22H2 (19045.4355)',
     department: 'HR', ip: '10.2.0.78', mac: '00:26:B9:FF:88:C3',
     username: 'k.robinson', complianceScore: 72, status: 'warning', failedChecks: 8, passedChecks: 22,
     lastSeen: minutesAgo(40), lastScanned: hoursAgo(5), domainJoined: true,
@@ -275,6 +277,42 @@ export const adDomainStatus: ADDomainStatus = {
     { type: 'as_rep_roasting', account: 'p.nguyen', timestamp: daysAgo(2), severity: 'warning' },
   ],
   staleAccounts: 11,
+  staleAccountRecords: [
+    {
+      id: 'ad-account-001', accountName: 'svc.legacy-backup', displayName: 'Legacy Backup Service', accountType: 'service',
+      organizationalUnit: 'OU=Service Accounts,DC=corp,DC=local', enabled: true, lastLogon: daysAgo(128),
+      passwordLastSet: daysAgo(220), passwordNeverExpires: true, distinguishedName: 'CN=svc.legacy-backup,OU=Service Accounts,DC=corp,DC=local',
+      sourceDomainController: 'NYC-DC-01', stale: true,
+    },
+    {
+      id: 'ad-account-002', accountName: 'j.williams', displayName: 'Jordan Williams', accountType: 'user',
+      organizationalUnit: 'OU=Finance,DC=corp,DC=local', enabled: true, lastLogon: daysAgo(96),
+      passwordLastSet: daysAgo(180), passwordNeverExpires: false, distinguishedName: 'CN=j.williams,OU=Finance,DC=corp,DC=local',
+      sourceDomainController: 'NYC-DC-02', stale: true,
+    },
+    {
+      id: 'ad-account-003', accountName: 'CHI-WKS-0044$', displayName: 'CHI-WKS-0044', accountType: 'computer',
+      organizationalUnit: 'OU=Workstations,DC=corp,DC=local', enabled: true, lastLogon: daysAgo(143),
+      passwordLastSet: daysAgo(143), passwordNeverExpires: true, distinguishedName: 'CN=CHI-WKS-0044,OU=Workstations,DC=corp,DC=local',
+      sourceDomainController: 'NYC-DC-03', stale: true,
+    },
+  ],
+  kerberosEvents: [
+    {
+      id: 'kerb-event-001', eventId: 4769, activity: 'service_ticket_requested', account: 'svc.sql',
+      servicePrincipalName: 'MSSQLSvc/sql01.corp.local', clientHost: 'NYC-WKS-0087', clientIp: '10.0.1.87',
+      sourceDomainController: 'NYC-DC-01', timestamp: hoursAgo(6), severity: 'critical', detectionReason: 'Unusual service-ticket volume for a privileged service account',
+    },
+    {
+      id: 'kerb-event-002', eventId: 4771, activity: 'pre_authentication_failed', account: 'p.nguyen',
+      clientHost: 'NYC-LT-0301', clientIp: '10.0.1.148', sourceDomainController: 'NYC-DC-02', timestamp: daysAgo(2), severity: 'warning',
+      detectionReason: 'Repeated pre-authentication failures from a new client host',
+    },
+    {
+      id: 'kerb-event-003', eventId: 4768, activity: 'ticket_requested', account: 'j.chen',
+      clientHost: 'NYC-LT-0142', clientIp: '10.0.1.42', sourceDomainController: 'NYC-DC-01', timestamp: hoursAgo(14), severity: 'info',
+    },
+  ],
 }
 
 // ─── Alerts ───────────────────────────────────────────────────────────────────

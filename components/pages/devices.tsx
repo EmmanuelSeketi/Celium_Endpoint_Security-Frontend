@@ -1,8 +1,8 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Plus, Laptop } from 'lucide-react'
+import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Laptop, CheckCircle2, XCircle } from 'lucide-react'
 import { Gauge } from '@mui/x-charts/Gauge'
 import { devices as allDevices } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
@@ -28,7 +28,7 @@ const SEVERITY: Record<Severity, { dot: string; label: string }> = {
 
 const REPORTING_STATUS: Record<ReportingStatus, { dot: string; label: string }> = {
   online: { dot: 'var(--status-good)', label: 'Online' },
-  stale: { dot: 'var(--status-warning)', label: 'Stale' },
+  stale: { dot: 'var(--status-critical)', label: 'Stale' },
   offline: { dot: 'var(--status-unknown)', label: 'Offline' },
   disconnected: { dot: 'var(--status-critical)', label: 'Disconnected' },
 }
@@ -63,13 +63,88 @@ function StatusIndicator({ status, className, showDot = true }: { status: Device
 }
 
 function ReportingStatusIndicator({ lastSeen, className }: { lastSeen: string; className?: string }) {
-  const status = REPORTING_STATUS[getReportingStatus(lastSeen)]
+  const [hydrated, setHydrated] = useState(false)
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
+
+  const status = hydrated ? REPORTING_STATUS[getReportingStatus(lastSeen)] : REPORTING_STATUS.online
   return (
     <span className={cn('inline-flex items-center gap-1.5', className)}>
       <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: status.dot }} />
       <span className="text-[12px] font-medium text-black dark:text-white">{status.label}</span>
     </span>
   )
+}
+
+type MalwareRow = {
+  label: string
+  value: string
+  color?: string
+  mono?: boolean
+}
+
+function getMalwareRows(device: Device): { provider: string; summary: string; rows: MalwareRow[] } {
+  const malware = device.malwareStatus
+  const protectionColor = malware.realtimeProtection ? 'var(--status-good)' : STATUS_COLORS.critical
+  const scanLabel = malware.lastScanResult.replace(/_/g, ' ').replace(/\b\w/g, character => character.toUpperCase())
+
+  if (device.os === 'Windows') {
+    return {
+      provider: 'Microsoft Defender Antivirus',
+      summary: malware.realtimeProtection ? 'Protection is active' : 'Action needed',
+      rows: [
+        { label: 'Security intelligence', value: `${malware.definitionAge} day${malware.definitionAge === 1 ? '' : 's'} old`, color: getDefinitionAgeColor(malware.definitionAge) },
+        { label: 'Engine version', value: malware.engineVersion, mono: true },
+        { label: 'Security intelligence status', value: malware.definitionAge <= 3 ? 'Up to date' : 'Update required', color: malware.definitionAge <= 3 ? protectionColor : STATUS_COLORS.warning },
+        { label: 'Security intelligence version', value: malware.securityIntelligenceVersion ?? malware.engineVersion, mono: true },
+        { label: 'Version created', value: malware.securityIntelligenceCreatedAt ? format(new Date(malware.securityIntelligenceCreatedAt), 'MMM d, yyyy HH:mm') : 'Not reported' },
+        { label: 'Last update', value: malware.securityIntelligenceUpdatedAt ? format(new Date(malware.securityIntelligenceUpdatedAt), 'MMM d, yyyy HH:mm') : format(new Date(device.lastScanned), 'MMM d, yyyy HH:mm'), color: malware.definitionAge <= 3 ? protectionColor : STATUS_COLORS.warning },
+        { label: 'Update check', value: malware.definitionAge <= 3 ? 'No action needed' : 'Check for updates', color: malware.definitionAge <= 3 ? protectionColor : STATUS_COLORS.warning },
+        { label: 'Real-time protection', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+        { label: 'Dev Drive protection', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+        { label: 'Cloud-delivered protection', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+        { label: 'Automatic sample submission', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+        { label: 'Tamper protection', value: malware.tamperProtection ? 'Enabled' : 'Disabled', color: malware.tamperProtection ? protectionColor : STATUS_COLORS.critical },
+        { label: 'Controlled folder access', value: malware.tamperProtection ? 'Review settings' : 'Not enabled', color: malware.tamperProtection ? STATUS_COLORS.warning : STATUS_COLORS.critical },
+        { label: 'Ransomware protection', value: malware.tamperProtection ? 'No action needed' : 'Review settings', color: malware.tamperProtection ? protectionColor : STATUS_COLORS.warning },
+        { label: 'Quarantine history', value: String(malware.quarantineCount), mono: true },
+      ],
+    }
+  }
+
+  if (device.os === 'Mac') {
+    return {
+      provider: 'Apple Endpoint Security',
+      summary: malware.realtimeProtection ? 'Built-in protections are active' : 'Action needed',
+      rows: [
+        { label: 'XProtect malware definitions', value: `${malware.definitionAge} day${malware.definitionAge === 1 ? '' : 's'} old`, color: getDefinitionAgeColor(malware.definitionAge) },
+        { label: 'XProtect remediation', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+        { label: 'Gatekeeper', value: malware.realtimeProtection ? 'Enabled' : 'Review settings', color: protectionColor },
+        { label: 'Malware Removal Tool', value: malware.realtimeProtection ? 'Available' : 'Unavailable', color: protectionColor },
+        { label: 'Background malware scan', value: scanLabel, color: malware.lastScanResult === 'clean' ? protectionColor : STATUS_COLORS.critical },
+        { label: 'Last scan result', value: scanLabel, color: malware.lastScanResult === 'clean' ? protectionColor : STATUS_COLORS.critical },
+        { label: 'Security component version', value: malware.engineVersion, mono: true },
+        { label: 'Detected items', value: String(malware.quarantineCount), mono: true },
+      ],
+    }
+  }
+
+  return {
+    provider: 'Linux Endpoint Protection',
+    summary: malware.realtimeProtection ? 'Endpoint protection is active' : 'Action needed',
+    rows: [
+      { label: 'EDR agent', value: malware.realtimeProtection ? 'Running' : 'Stopped', color: protectionColor },
+      { label: 'ClamAV / malware engine', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+      { label: 'Signature database', value: `${malware.definitionAge} day${malware.definitionAge === 1 ? '' : 's'} old`, color: getDefinitionAgeColor(malware.definitionAge) },
+      { label: 'On-access scanning', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
+      { label: 'Audit and detection service', value: malware.tamperProtection ? 'Running' : 'Review required', color: malware.tamperProtection ? protectionColor : STATUS_COLORS.warning },
+      { label: 'Last scan result', value: scanLabel, color: malware.lastScanResult === 'clean' ? protectionColor : STATUS_COLORS.critical },
+      { label: 'Engine version', value: malware.engineVersion, mono: true },
+      { label: 'Quarantined items', value: String(malware.quarantineCount), mono: true },
+    ],
+  }
 }
 
 function OSIcon({ os, className }: { os: OS; className?: string }) {
@@ -117,11 +192,11 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
   const defColor = getDefinitionAgeColor(device.malwareStatus.definitionAge)
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-card border-l border-border w-[480px] h-full overflow-y-auto z-10 flex flex-col">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" onClick={onClose} />
+      <div className="relative z-10 flex h-[min(860px,calc(100vh-2rem))] w-full max-w-[640px] flex-col overflow-hidden rounded-lg border border-border bg-card shadow-2xl sm:h-[min(860px,calc(100vh-3rem))]">
         {/* Header */}
-        <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-card">
+        <div className="sticky top-0 z-30 flex items-start justify-between border-b border-border bg-card px-5 py-4">
           <div>
             <div className="flex items-center gap-2 mb-1">
               <Laptop size={15} strokeWidth={1.5} className="text-black dark:text-white" />
@@ -140,10 +215,9 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-border px-5 sticky top-[73px] bg-card">
+        <div className="sticky top-[73px] z-20 flex border-b border-border bg-card px-5">
           {([
-            ['overview', 'Dashboard'],
-            ...(device.domainJoined ? [['ad', 'Active Directory']] : []),
+            ['overview', 'Overview'],
             ['malware', 'Malware'],
             ['patches', 'Patches'],
             ['history', 'History'],
@@ -152,7 +226,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
               key={id}
               onClick={() => setTab(id as typeof tab)}
               className={cn(
-                'px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors -mb-px',
+                'px-4 py-2.5 text-[12px] font-medium border-b-2 transition-colors -mb-px first:pl-0',
                 tab === id
                   ? 'border-brand text-brand'
                   : 'border-transparent text-black dark:text-white hover:text-black dark:hover:text-white'
@@ -163,14 +237,14 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
           ))}
         </div>
 
-        <div className="p-5 flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">
           {tab === 'overview' && (
             <div className="space-y-4">
               {/* Score Ring */}
-              <div className="flex items-center gap-4 bg-surface border border-border rounded-md p-4">
+              <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4">
                 <Gauge
-                  width={72}
-                  height={72}
+                  width={104}
+                  height={104}
                   value={device.complianceScore}
                   valueMin={0}
                   valueMax={100}
@@ -187,78 +261,155 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                     },
                     [`& .MuiGauge-valueText`]: {
                       fill: SEVERITY[device.status as Severity].dot,
-                      fontSize: 18,
+                      fontSize: 22,
                       fontFamily: 'monospace',
                       fontWeight: 600,
                     },
                   }}
                 />
                 <div>
-                  <p className="text-[13px] font-semibold text-black dark:text-white">Compliance Score</p>
-                    <p className="text-[12px] text-black dark:text-white mt-0.5">
-                    {device.failedChecks} failed · {device.passedChecks} passed
-                  </p>
+                  <p className="text-[13px] font-semibold text-foreground">Compliance Score</p>
+                  <div className="mt-1 space-y-0.5 text-[12px] text-black dark:text-white">
+                    <p className="inline-flex items-center gap-1.5 font-medium text-black dark:text-white">
+                      <CheckCircle2 size={13} strokeWidth={2.25} className="text-[var(--category-1)]" />
+                      {device.passedChecks} passed
+                    </p>
+                    <p className="flex items-center gap-1.5 font-medium text-black dark:text-white">
+                      <XCircle size={13} strokeWidth={2.25} className="text-[var(--status-critical)]" />
+                      {device.failedChecks} failed
+                    </p>
+                  </div>
                 </div>
               </div>
 
-              {/* Key facts */}
-              <div className="grid grid-cols-2 gap-3">
+              <div>
+                <p className="mb-2 text-[13px] font-semibold text-foreground">Device information</p>
+                <div className="divide-y divide-border rounded-md border border-border bg-surface">
                 {[
+                  { label: 'Asset Type', value: device.assetType === 'dc_server' ? 'DC Server' : device.assetType === 'laptop' ? 'Laptop' : 'Workstation' },
+                  { label: 'Operating System', value: `${device.os} · ${device.osVersion}` },
+                  { label: 'IP Address', value: device.ip, mono: true },
+                  { label: 'Health', value: SEVERITY[scoreToSeverity(device.complianceScore)].label, color: SEVERITY[scoreToSeverity(device.complianceScore)].dot },
+                  { label: 'Status', value: REPORTING_STATUS[getReportingStatus(device.lastSeen)].label, color: REPORTING_STATUS[getReportingStatus(device.lastSeen)].dot },
+                  { label: 'Last Seen', value: formatDistanceToNow(new Date(device.lastSeen), { addSuffix: true }) },
                   { label: 'Department', value: device.department },
                   { label: 'Username', value: device.username },
                   { label: 'Domain Joined', value: device.domainJoined ? 'Yes' : 'No' },
                   { label: 'Last Scanned', value: formatDistanceToNow(new Date(device.lastScanned), { addSuffix: true }) },
                   { label: 'MAC Address', value: device.mac, mono: true },
                 ].map(item => (
-                  <div key={item.label} className="bg-surface border border-border rounded-md p-3">
-                    <p className="text-[11px] uppercase tracking-wider text-black dark:text-white font-medium">{item.label}</p>
-                    <p className={cn('text-[13px] text-black dark:text-white mt-1', item.mono && 'font-mono')}>{item.value}</p>
+                  <div key={item.label} className="flex items-center justify-between gap-4 px-3 py-2.5">
+                    <span className="text-[12px] text-black dark:text-white">{item.label}</span>
+                    <span className={cn('inline-flex items-center gap-1.5 text-right text-[12px] text-black dark:text-white', item.mono && 'font-mono')}>
+                      {item.color && <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: item.color }} />}
+                      {item.value}
+                    </span>
                   </div>
                 ))}
+                </div>
               </div>
             </div>
           )}
 
           {tab === 'malware' && (
-            <div className="space-y-3">
-              <div className="bg-surface border border-border rounded-md divide-y divide-border">
-                {[
-                  { label: 'Engine Version', value: device.malwareStatus.engineVersion, mono: true },
-                  {
-                    label: 'Definition Age',
-                    value: `${device.malwareStatus.definitionAge} day${device.malwareStatus.definitionAge !== 1 ? 's' : ''}`,
-                    color: defColor,
-                  },
-                  {
-                    label: 'Real-time Protection',
-                    value: device.malwareStatus.realtimeProtection ? 'Enabled' : 'Disabled',
-                    color: device.malwareStatus.realtimeProtection ? 'var(--category-1)' : '#F04438',
-                  },
-                  {
-                    label: 'Tamper Protection',
-                    value: device.malwareStatus.tamperProtection ? 'Enabled' : 'Disabled',
-                    color: device.malwareStatus.tamperProtection ? 'var(--category-1)' : '#F04438',
-                  },
-                  {
-                    label: 'Last Scan Result',
-                    value: device.malwareStatus.lastScanResult.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-                    color: device.malwareStatus.lastScanResult === 'clean' ? 'var(--category-1)' : '#F04438',
-                  },
-                  { label: 'Quarantine Count', value: String(device.malwareStatus.quarantineCount), mono: true },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
-                    <span className="text-[12px] text-black dark:text-white">{item.label}</span>
-                    <span className={cn('text-[12px] text-black dark:text-white', item.mono && 'font-mono')} style={item.color ? { color: item.color } : undefined}>
-                      {item.value}
-                    </span>
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-4">
+              {(() => {
+                const malwareDetails = getMalwareRows(device)
+                const protectionActive = device.malwareStatus.realtimeProtection
+                return (
+                  <>
+                    {device.os === 'Windows' && (
+                      <section className="space-y-3 rounded-md border border-border bg-surface p-4">
+                        <div>
+                          <p className="text-[13px] font-semibold text-foreground">Current threats</p>
+                          <div className="mt-2 space-y-0.5 text-[12px] text-muted-foreground">
+                            <p className={cn('font-medium', device.malwareStatus.quarantineCount > 0 ? 'text-status-critical' : 'text-black dark:text-white')}>
+                              {device.malwareStatus.quarantineCount > 0 ? `${device.malwareStatus.quarantineCount} threat${device.malwareStatus.quarantineCount === 1 ? '' : 's'} found or quarantined.` : 'No current threats found.'}
+                            </p>
+                            <p>
+                              Last {device.malwareStatus.lastScanType ?? 'quick'} scan completed {formatDistanceToNow(new Date(device.malwareStatus.lastScanAt ?? device.lastScanned), { addSuffix: true })}
+                              {' · '}{(device.malwareStatus.lastScanFiles ?? 47714).toLocaleString()} files scanned
+                            </p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => undefined}
+                          className="rounded-md bg-[#303030] px-5 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#3b3b3b]"
+                        >
+                          Quick scan
+                        </button>
+                      </section>
+                    )}
+                    <div className="flex items-center gap-3 rounded-md border border-border bg-surface p-4">
+                      <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: `${protectionActive ? 'var(--status-good)' : STATUS_COLORS.critical}20` }}>
+                        <span className="h-3 w-3 rounded-full" style={{ backgroundColor: protectionActive ? 'var(--status-good)' : STATUS_COLORS.critical }} />
+                      </span>
+                      <div>
+                        <p className="text-[13px] font-semibold text-foreground">{malwareDetails.provider}</p>
+                        <p className="text-[12px] text-muted-foreground">{malwareDetails.summary} · {device.os} protection profile</p>
+                      </div>
+                    </div>
+                    {device.os === 'Windows' ? (
+                      <>
+                        {[
+                          {
+                            title: 'Virus & threat protection settings',
+                            description: 'Core Microsoft Defender protection controls.',
+                            labels: ['Real-time protection', 'Dev Drive protection', 'Cloud-delivered protection', 'Automatic sample submission', 'Tamper protection'],
+                          },
+                          {
+                            title: 'Virus & threat protection updates',
+                            description: 'Security intelligence and engine update status.',
+                            labels: ['Security intelligence', 'Engine version', 'Security intelligence status', 'Security intelligence version', 'Version created', 'Last update', 'Update check'],
+                          },
+                          {
+                            title: 'Ransomware protection',
+                            description: 'Controls that protect files and folders from unauthorized changes.',
+                            labels: ['Controlled folder access', 'Ransomware protection', 'Quarantine history'],
+                          },
+                        ].map(section => {
+                          const rows = malwareDetails.rows.filter(row => section.labels.includes(row.label))
+                          return (
+                            <section key={section.title} className="space-y-2">
+                              <div>
+                                <p className="text-[13px] font-semibold text-foreground">{section.title}</p>
+                                <p className="mt-0.5 text-[12px] text-muted-foreground">{section.description}</p>
+                              </div>
+                              <div className="bg-surface border border-border rounded-md divide-y divide-border">
+                                {rows.map(item => (
+                                  <div key={item.label} className="flex items-center justify-between gap-4 px-3 py-2.5">
+                                    <span className="text-[12px] text-black dark:text-white">{item.label}</span>
+                                    <span className={cn('text-right text-[12px] text-black dark:text-white', item.mono && 'font-mono')} style={item.color ? { color: item.color } : undefined}>
+                                      {item.value}
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            </section>
+                          )
+                        })}
+                      </>
+                    ) : (
+                      <div className="bg-surface border border-border rounded-md divide-y divide-border">
+                        {malwareDetails.rows.map(item => (
+                          <div key={item.label} className="flex items-center justify-between gap-4 px-3 py-2.5">
+                            <span className="text-[12px] text-black dark:text-white">{item.label}</span>
+                            <span className={cn('text-right text-[12px] text-black dark:text-white', item.mono && 'font-mono')} style={item.color ? { color: item.color } : undefined}>
+                              {item.value}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )
+              })()}
             </div>
           )}
 
           {tab === 'patches' && (
-            <div className="space-y-3">
+            <div className="space-y-4">
               <div className="bg-surface border border-border rounded-md divide-y divide-border">
                 {[
                   { label: 'Missing Critical', value: device.patchStatus.missingCritical, color: device.patchStatus.missingCritical > 0 ? STATUS_COLORS.critical : 'var(--category-1)' },
@@ -269,7 +420,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                 ].map(item => (
                   <div key={item.label} className="flex items-center justify-between px-3 py-2.5">
                     <span className="text-[12px] text-black dark:text-white">{item.label}</span>
-                    <span className="text-[12px] font-mono" style={item.color ? { color: item.color } : { color: '#E6E8EB' }}>
+                    <span className={cn('text-[12px] font-mono', !item.color && 'text-black dark:text-white')} style={item.color ? { color: item.color } : undefined}>
                       {String(item.value)}
                     </span>
                   </div>
@@ -279,10 +430,8 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
           )}
 
           {tab === 'history' && (
-            <div className="space-y-2">
-              <p className="text-[13px] text-black dark:text-white py-8 text-center">
-                Scan history shows the last 30 scan events for this device.
-              </p>
+            <div className="space-y-4">
+              <p className="text-[13px] font-semibold text-foreground">Recent scans</p>
               <div className="bg-surface border border-border rounded-md divide-y divide-border">
                 {[...Array(5)].map((_, i) => {
                   const score = device.complianceScore - i * 2
@@ -309,6 +458,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
 
 export function DevicesPage() {
   const [search, setSearch] = useState('')
+  const [hydrated, setHydrated] = useState(false)
   const [page, setPage] = useState(1)
   const [osFilter, setOsFilter] = useState<OS | ''>('')
   const [statusFilter, setStatusFilter] = useState<DeviceStatus | ''>('')
@@ -317,6 +467,10 @@ export function DevicesPage() {
   const [osOpen, setOsOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [deptOpen, setDeptOpen] = useState(false)
+
+  useEffect(() => {
+    setHydrated(true)
+  }, [])
 
   const filtered = useMemo(() => {
     return allDevices.filter(d => {
@@ -347,12 +501,6 @@ export function DevicesPage() {
           title="Devices"
           description={`${allDevices.length} endpoints in the fleet.`}
           className="pt-4"
-          action={
-            <button className="flex items-center gap-2 px-3 py-1.5 bg-brand text-white rounded-md text-[13px] font-medium hover:bg-brand/90 transition-colors">
-              <Plus size={14} strokeWidth={2} />
-              Add Device
-            </button>
-          }
         >
           {/* Filter bar */}
           <div className="flex items-center gap-2 flex-wrap">
@@ -465,17 +613,19 @@ export function DevicesPage() {
         <SectionCard noPadding>
           <table className="w-full table-fixed text-[12px]">
             <colgroup>
-              <col className="w-[22%]" />
-              <col className="w-[16%]" />
+              <col className="w-[19%]" />
+              <col className="w-[13%]" />
+              <col className="w-[14%]" />
               <col className="w-[15%]" />
-              <col className="w-[16%]" />
               <col className="w-[15%]" />
-              <col className="w-[16%]" />
+              <col className="w-[12%]" />
+              <col className="w-[12%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-border">
                 {[
                   { label: 'Device', align: 'left', sortable: false },
+                  { label: 'Asset Type', align: 'left', sortable: false },
                   { label: 'OS', align: 'left', sortable: false },
                   { label: 'IP', align: 'left', sortable: false },
                   { label: 'Health', align: 'left', sortable: false },
@@ -491,7 +641,7 @@ export function DevicesPage() {
             <tbody>
               {filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center">
+                  <td colSpan={7} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
                       <Laptop size={20} strokeWidth={1.5} className="text-muted-foreground" />
                       <p className="text-[13px] text-muted-foreground">No devices match the current filters.</p>
@@ -509,6 +659,11 @@ export function DevicesPage() {
                       <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.name}</span>
                     </td>
                     <td className="px-3">
+                      <span className="text-[12px] font-medium text-black dark:text-white">
+                        {d.assetType === 'dc_server' ? 'DC Server' : d.assetType === 'laptop' ? 'Laptop' : 'Workstation'}
+                      </span>
+                    </td>
+                    <td className="px-3">
                       <div className="flex items-center gap-2">
                         <OSIcon os={d.os} />
                         <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>
@@ -521,7 +676,7 @@ export function DevicesPage() {
                     <td className="px-3 pl-8">
                       <ReportingStatusIndicator lastSeen={d.lastSeen} />
                     </td>
-                    <td className="px-3"><span className="text-[12px] font-medium text-black dark:text-white">{formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true })}</span></td>
+                    <td className="px-3"><span className="text-[12px] font-medium text-black dark:text-white">{hydrated ? formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true }) : '—'}</span></td>
                   </tr>
                 ))
               )}

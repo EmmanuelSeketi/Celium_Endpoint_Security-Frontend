@@ -1,6 +1,5 @@
 import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
-import Script from 'next/script'
 import { Inter, JetBrains_Mono } from 'next/font/google'
 import { AuthProvider } from '@/lib/auth-provider'
 import { DataModeProvider } from '@/lib/data-mode-provider'
@@ -46,29 +45,6 @@ export default function RootLayout({
   return (
     <html lang="en" className={`dark bg-background ${inter.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body className="antialiased font-sans">
-        <Script
-          id="theme-initialization"
-          strategy="beforeInteractive"
-          dangerouslySetInnerHTML={{
-            __html: `
-              (function() {
-                try {
-                  var stored = localStorage.getItem('fleet-theme');
-                  if (stored === 'light') {
-                    document.documentElement.classList.remove('dark');
-                    document.documentElement.classList.add('light');
-                  } else if (stored === 'dark') {
-                    document.documentElement.classList.add('dark');
-                    document.documentElement.classList.remove('light');
-                  } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
-                    document.documentElement.classList.remove('dark');
-                    document.documentElement.classList.add('light');
-                  }
-                } catch (e) {}
-              })();
-            `,
-          }}
-        />
         <AuthProvider>
           <DataModeProvider>
             <ThemeProvider>

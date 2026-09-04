@@ -7,6 +7,7 @@ import { ArrowRight, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { alerts as demoAlerts, devices as demoDevices, complianceChecks as demoChecks, getFleetStats } from '@/lib/mock-data'
 import { getCategoryLabel } from '@/lib/theme'
+import { STATUS_COLORS } from '@/lib/theme'
 import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
@@ -36,6 +37,29 @@ function OSIcon({ os, className }: { os: string; className?: string }) {
     return <img src="/Linux.svg" width="16" height="16" className={className} alt="Linux" />
   }
   return null
+}
+
+function deviceHealthLabel(status: string) {
+  if (status === 'compliant') return 'Healthy'
+  if (status === 'warning') return 'Warning'
+  if (status === 'critical' || status === 'error') return 'Critical'
+  return 'Unknown'
+}
+
+function deviceHealthColor(status: string) {
+  if (status === 'compliant') return 'var(--category-1)'
+  if (status === 'warning') return STATUS_COLORS.warning
+  if (status === 'critical' || status === 'error') return STATUS_COLORS.critical
+  return 'var(--muted-foreground)'
+}
+
+function reportingStatus(lastCheckin: string | undefined, status: string) {
+  if (!lastCheckin) return { label: status === 'active' ? 'Online' : 'Unknown', color: status === 'active' ? STATUS_COLORS.compliant : 'var(--muted-foreground)' }
+  const hoursAgo = (Date.now() - new Date(lastCheckin).getTime()) / (1000 * 60 * 60)
+  if (hoursAgo <= 1) return { label: 'Online', color: STATUS_COLORS.compliant }
+  if (hoursAgo <= 24) return { label: 'Stale', color: STATUS_COLORS.critical }
+  if (hoursAgo <= 24 * 7) return { label: 'Offline', color: STATUS_COLORS.unknown }
+  return { label: 'Disconnected', color: STATUS_COLORS.critical }
 }
 
 export function OverviewPage() {
@@ -72,13 +96,16 @@ export function OverviewPage() {
     id: device.id,
     device_id: device.id,
     hostname: device.name,
+    assetType: device.assetType,
+    health: device.status,
+    complianceScore: device.complianceScore,
     os: device.os === 'Mac' ? 'macos' : device.os.toLowerCase() as ManagedDevice['os'],
     os_version: device.osVersion,
     ip_address: device.ip,
     status: device.status === 'compliant' ? 'active' : device.status === 'critical' ? 'error' : 'inactive' as ManagedDevice['status'],
     last_checkin: device.lastSeen,
     created_at: device.lastSeen,
-  })) : liveDevices
+  })) : liveDevices.map(device => ({ ...device, assetType: 'unknown', health: 'unknown', complianceScore: undefined }))
   const displayAlerts = overviewDemoMode ? demoAlerts.map(alert => ({
     id: alert.id,
     title: alert.message,
@@ -385,26 +412,26 @@ export function OverviewPage() {
       >
         <table className="w-full table-fixed text-[12px]">
           <colgroup>
-            <col className="w-[18%]" />
+            <col className="w-[19%]" />
             <col className="w-[13%]" />
-            <col className="w-[12%]" />
-            <col className="w-[8%]" />
-            <col className="w-[18%]" />
-            <col className="w-[16%]" />
+            <col className="w-[14%]" />
             <col className="w-[15%]" />
+            <col className="w-[15%]" />
+            <col className="w-[12%]" />
+            <col className="w-[12%]" />
           </colgroup>
-          <thead>
+          <thead className="bg-[#F5F7FA] dark:bg-surface-elevated">
             <tr className="border-b border-border">
               {[
                 { label: 'Device', align: 'left' },
+                { label: 'Asset Type', align: 'left' },
                 { label: 'OS', align: 'left' },
                 { label: 'IP', align: 'left' },
-                { label: 'Score', align: 'right' },
-                { label: 'Checks', align: 'right' },
+                { label: 'Health', align: 'left' },
                 { label: 'Status', align: 'left' },
                 { label: 'Last Seen', align: 'left' },
               ].map(h => (
-                <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground align-middle', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Checks' && 'pr-8', h.label === 'Status' && 'pl-8')}>
+                <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground align-middle', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Status' && 'pl-8')}>
                   {h.label}
                 </th>
               ))}
@@ -420,23 +447,33 @@ export function OverviewPage() {
                   <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.hostname}</span>
                 </td>
                 <td className="px-3">
+                  <span className="text-[12px] font-medium text-black dark:text-white">
+                    {d.assetType === 'dc_server' ? 'DC Server' : d.assetType === 'laptop' ? 'Laptop' : d.assetType === 'workstation' ? 'Workstation' : 'Unknown'}
+                  </span>
+                </td>
+                <td className="px-3">
                   <div className="flex items-center gap-2">
                     <OSIcon os={d.os === 'macos' ? 'Mac' : d.os.charAt(0).toUpperCase() + d.os.slice(1)} />
                     <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>
                   </div>
                 </td>
                 <td className="px-3"><span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.ip_address}</span></td>
-                <td className="px-3 align-middle text-right">
-                  <span className="inline-block text-[12px] font-semibold leading-none tabular-nums text-black dark:text-white" style={{ fontVariantNumeric: 'tabular-nums' }}>
-                    0%
+                <td className="px-3 align-middle">
+                  <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-black dark:text-white">
+                    <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: deviceHealthColor(d.health) }} />
+                    {d.complianceScore === undefined ? 'Unknown' : deviceHealthLabel(d.health)}
                   </span>
                 </td>
-                <td className="px-3 pr-8 text-right align-middle">
-                  <span className="font-mono text-[12px] font-semibold text-black dark:text-white">0</span>
-                  <span className="font-mono text-[12px] font-medium text-black dark:text-white"> / 0</span>
-                </td>
                 <td className="px-3 pl-8">
-                  <span className="text-[12px] font-semibold text-foreground">{d.status.charAt(0).toUpperCase() + d.status.slice(1)}</span>
+                  {(() => {
+                    const status = reportingStatus(d.last_checkin, d.status)
+                    return (
+                      <span className="inline-flex items-center gap-1.5 text-[12px] font-medium text-black dark:text-white">
+                        <span className="h-[7px] w-[7px] shrink-0 rounded-full" style={{ backgroundColor: status.color }} />
+                        {status.label}
+                      </span>
+                    )
+                  })()}
                 </td>
                 <td className="px-3">
                   <span className="text-[12px] font-medium text-black dark:text-white">{d.last_checkin ? formatDistanceToNow(new Date(d.last_checkin), { addSuffix: true }) : 'Never'}</span>

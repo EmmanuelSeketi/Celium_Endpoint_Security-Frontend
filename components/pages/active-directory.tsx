@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Network, CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, ArrowDownRight, Users, Clock } from 'lucide-react'
+import { Network, CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, ArrowDownRight, Users, Clock, Eye, X } from 'lucide-react'
 import { adDomainStatus, authActivityTrend } from '@/lib/mock-data'
+import type { ADAccountRecord, KerberosEventRecord } from '@/lib/types'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -33,8 +35,36 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   )
 }
 
+function ADDetailDrawer({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <aside className="relative z-10 flex h-full w-full max-w-[520px] flex-col overflow-y-auto border-l border-border bg-card">
+        <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-4">
+          <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
+          <button type="button" onClick={onClose} aria-label="Close details" className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-surface-hover hover:text-foreground">
+            <X size={15} />
+          </button>
+        </div>
+        <div className="p-5">{children}</div>
+      </aside>
+    </div>
+  )
+}
+
+function DetailField({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
+  return (
+    <div className="border-b border-border py-2.5 last:border-0">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
+      <p className={cn('mt-1 text-[12px] text-foreground', mono && 'font-mono')}>{value}</p>
+    </div>
+  )
+}
+
 export function ActiveDirectoryPage() {
   const { domainControllers, failedLogons24h, successfulLogons24h, privilegedGroupChanges, kerberosAnomalies, staleAccounts } = adDomainStatus
+  const [selectedStaleAccount, setSelectedStaleAccount] = useState<ADAccountRecord | null>(null)
+  const [selectedKerberosEvent, setSelectedKerberosEvent] = useState<KerberosEventRecord | null>(null)
   const allDcsHealthy = domainControllers.every(dc => dc.online && dc.replicationHealthy)
   const failRate = Math.round((failedLogons24h / (failedLogons24h + successfulLogons24h)) * 100 * 10) / 10
 
@@ -164,7 +194,7 @@ export function ActiveDirectoryPage() {
           ) : (
             <div className="space-y-2">
               {kerberosAnomalies.map((a, i) => (
-                <div key={i} className="bg-surface border border-border rounded-md px-3 py-2.5">
+                <button type="button" key={i} onClick={() => setSelectedKerberosEvent(adDomainStatus.kerberosEvents[i])} className="block w-full bg-surface border border-border rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-hover">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span
@@ -184,12 +214,61 @@ export function ActiveDirectoryPage() {
                     {ANOMALY_LABELS[a.type] ?? a.type}
                   </p>
                   <p className="font-mono text-[12px] font-medium text-muted-foreground mt-0.5">{a.account}</p>
-                </div>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-brand"><Eye size={12} /> View event details</span>
+                </button>
               ))}
             </div>
           )}
         </SectionCard>
       </div>
+
+      {/* Backend-ready historical records */}
+      <SectionCard title="Stale Accounts" description="Accounts with no successful logon for 90+ days. Select a record to inspect its directory source and account attributes.">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[640px] text-[12px]">
+            <thead>
+              <tr className="border-b border-border text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="px-3 py-2">Account</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Last logon</th><th className="px-3 py-2">Source DC</th><th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {adDomainStatus.staleAccountRecords.map(account => (
+                <tr key={account.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
+                  <td className="px-3 py-2.5 font-mono font-semibold text-foreground">{account.accountName}</td>
+                  <td className="px-3 py-2.5 capitalize text-muted-foreground">{account.accountType}</td>
+                  <td className="px-3 py-2.5 text-muted-foreground">{formatDistanceToNow(new Date(account.lastLogon), { addSuffix: true })}</td>
+                  <td className="px-3 py-2.5 font-mono text-muted-foreground">{account.sourceDomainController}</td>
+                  <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => setSelectedStaleAccount(account)} className="inline-flex items-center gap-1 text-brand hover:underline"><Eye size={13} /> Details</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
+
+      <SectionCard title="Kerberos Event History" description="Normalized domain-controller security events retained for investigation and correlation.">
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[760px] text-[12px]">
+            <thead>
+              <tr className="border-b border-border text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="px-3 py-2">Time</th><th className="px-3 py-2">Event</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Client</th><th className="px-3 py-2">Source DC</th><th className="px-3 py-2" />
+              </tr>
+            </thead>
+            <tbody>
+              {adDomainStatus.kerberosEvents.map(event => (
+                <tr key={event.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
+                  <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">{formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}</td>
+                  <td className="px-3 py-2.5 font-mono font-semibold text-foreground">{event.eventId}</td>
+                  <td className="px-3 py-2.5 font-mono text-foreground">{event.account}</td>
+                  <td className="px-3 py-2.5 font-mono text-muted-foreground">{event.clientHost}</td>
+                  <td className="px-3 py-2.5 font-mono text-muted-foreground">{event.sourceDomainController}</td>
+                  <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => setSelectedKerberosEvent(event)} className="inline-flex items-center gap-1 text-brand hover:underline"><Eye size={13} /> Details</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </SectionCard>
 
       {/* Privileged Group Changes */}
       <SectionCard title="Privileged Group Changes" description="Recent modifications to high-privilege AD groups.">
@@ -262,6 +341,37 @@ export function ActiveDirectoryPage() {
           <p className="text-[12px] font-medium text-muted-foreground mt-1">Privileged group changes</p>
         </div>
       </div>
+
+      {selectedStaleAccount && (
+        <ADDetailDrawer title={`Stale account: ${selectedStaleAccount.accountName}`} onClose={() => setSelectedStaleAccount(null)}>
+          <div className="divide-y divide-border rounded-md border border-border bg-surface px-3">
+            <DetailField label="Account" value={selectedStaleAccount.accountName} mono />
+            <DetailField label="Display name" value={selectedStaleAccount.displayName ?? 'Not provided'} />
+            <DetailField label="Account type" value={selectedStaleAccount.accountType} />
+            <DetailField label="Last logon" value={format(new Date(selectedStaleAccount.lastLogon), 'MMM d, yyyy HH:mm')} />
+            <DetailField label="Password last set" value={selectedStaleAccount.passwordLastSet ? format(new Date(selectedStaleAccount.passwordLastSet), 'MMM d, yyyy HH:mm') : 'Not provided'} />
+            <DetailField label="Password never expires" value={selectedStaleAccount.passwordNeverExpires ? 'Yes' : 'No'} />
+            <DetailField label="Organizational unit" value={selectedStaleAccount.organizationalUnit} mono />
+            <DetailField label="Distinguished name" value={selectedStaleAccount.distinguishedName} mono />
+            <DetailField label="Source domain controller" value={selectedStaleAccount.sourceDomainController} mono />
+          </div>
+        </ADDetailDrawer>
+      )}
+
+      {selectedKerberosEvent && (
+        <ADDetailDrawer title={`Kerberos event ${selectedKerberosEvent.eventId}`} onClose={() => setSelectedKerberosEvent(null)}>
+          <div className="divide-y divide-border rounded-md border border-border bg-surface px-3">
+            <DetailField label="Activity" value={selectedKerberosEvent.activity.replace(/_/g, ' ')} />
+            <DetailField label="Account" value={selectedKerberosEvent.account} mono />
+            <DetailField label="Service principal name" value={selectedKerberosEvent.servicePrincipalName ?? 'Not applicable'} mono />
+            <DetailField label="Client host" value={selectedKerberosEvent.clientHost} mono />
+            <DetailField label="Client IP" value={selectedKerberosEvent.clientIp} mono />
+            <DetailField label="Source domain controller" value={selectedKerberosEvent.sourceDomainController} mono />
+            <DetailField label="Event timestamp" value={format(new Date(selectedKerberosEvent.timestamp), 'MMM d, yyyy HH:mm:ss')} />
+            <DetailField label="Detection reason" value={selectedKerberosEvent.detectionReason ?? 'No anomaly reason recorded'} />
+          </div>
+        </ADDetailDrawer>
+      )}
     </div>
   )
 }
