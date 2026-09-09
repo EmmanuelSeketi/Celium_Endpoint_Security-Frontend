@@ -185,7 +185,7 @@ export interface QuarantineItem {
 export interface ReportTemplate {
   id: string
   name: string
-  type: 'Executive Summary' | 'Compliance Detail' | 'AD Security' | 'Malware Summary' | 'Patch Status'
+  type: 'Executive Summary' | 'Compliance Detail' | 'AD Security' | 'Malware Summary' | 'OS Updates'
   dateRange: string
   generatedDate: string
   format: 'PDF' | 'CSV'

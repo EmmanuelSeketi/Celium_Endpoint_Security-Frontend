@@ -1,7 +1,7 @@
 'use client'
 
 import { format } from 'date-fns'
-import { RefreshCw, AlertTriangle, CheckCircle2, Clock, ExternalLink } from 'lucide-react'
+import { RefreshCw, AlertTriangle, CheckCircle2, Clock, ExternalLink, Laptop, Server } from 'lucide-react'
 import { devices, missingPatches, getFleetStats } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
@@ -19,6 +19,14 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
       <p className="text-foreground font-mono font-semibold">{payload[0].value} device{payload[0].value !== 1 ? 's' : ''}</p>
     </div>
   )
+}
+
+function getUpdateState(device: (typeof devices)[number]) {
+  if (device.patchStatus.osEol) return { label: 'End of support', color: STATUS_COLORS.critical }
+  if (device.patchStatus.pendingReboot) return { label: 'Restart required', color: STATUS_COLORS.warning }
+  if (device.patchStatus.missingCritical > 0) return { label: 'Security updates missing', color: STATUS_COLORS.critical }
+  if (device.patchStatus.missingTotal > 0) return { label: 'Updates available', color: STATUS_COLORS.warning }
+  return { label: 'Up to date', color: STATUS_COLORS.compliant }
 }
 
 export function PatchCompliancePage() {
@@ -42,19 +50,24 @@ export function PatchCompliancePage() {
 
   // Per-device patch status sorted by missingCritical desc
   const devicesSorted = [...devices].sort((a, b) => b.patchStatus.missingCritical - a.patchStatus.missingCritical || b.patchStatus.missingTotal - a.patchStatus.missingTotal)
+  const platformSummaries = (['Windows', 'Mac', 'Linux'] as const).map(os => {
+    const platformDevices = devices.filter(device => device.os === os)
+    const current = platformDevices.filter(device => device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot).length
+    return { os, total: platformDevices.length, current, pending: platformDevices.filter(device => device.patchStatus.pendingReboot).length }
+  })
 
   return (
     <div className="space-y-4">
       <PageHeader
-        title="Patch Compliance"
-        description="Missing patch inventory, OS lifecycle status, and device patch distributions."
+        title="OS Updates"
+        description="Update coverage, operating system lifecycle, and device update posture."
       />
 
       {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           {
-            label: 'Patch Compliance',
+            label: 'Update Compliance',
             value: `${stats.patchCompliance}%`,
             description: `${stats.total - fullyPatched} devices have missing patches`,
             color: stats.patchCompliance >= 85 ? STATUS_COLORS.compliant : stats.patchCompliance >= 70 ? STATUS_COLORS.warning : STATUS_COLORS.critical,
@@ -88,6 +101,34 @@ export function PatchCompliancePage() {
         ))}
       </div>
 
+      {/* Platform posture */}
+      <SectionCard title="Update posture by platform" description="A quick view of update readiness across the fleet.">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+          {platformSummaries.map(({ os, total, current, pending }) => {
+            const percentage = total === 0 ? 0 : Math.round((current / total) * 100)
+            const Icon = os === 'Windows' ? Laptop : os === 'Linux' ? Server : RefreshCw
+            return (
+              <div key={os} className="rounded-md border border-border bg-surface px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Icon size={15} strokeWidth={1.5} className="text-brand" />
+                    <span className="text-[13px] font-semibold text-foreground">{os}</span>
+                  </div>
+                  <span className="font-mono text-[13px] font-semibold text-foreground">{percentage}%</span>
+                </div>
+                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
+                  <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percentage}%` }} />
+                </div>
+                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span>{current} of {total} ready</span>
+                  <span>{pending} restart{pending === 1 ? '' : 's'} required</span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </SectionCard>
+
       {/* Distribution chart + critical patches */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <SectionCard title="Missing Patch Distribution">
@@ -120,7 +161,7 @@ export function PatchCompliancePage() {
         </SectionCard>
 
         {/* Critical patches */}
-        <SectionCard title="Critical Missing Patches" className="lg:col-span-2">
+        <SectionCard title="Priority updates" className="lg:col-span-2">
           <div className="space-y-0">
             <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border">
               <span className="col-span-1">Sev</span>
@@ -184,14 +225,14 @@ export function PatchCompliancePage() {
       )}
 
       {/* Device patch table */}
-      <SectionCard title="Device Patch Status" description="All managed devices sorted by patch exposure.">
+      <SectionCard title="Device update status" description="All managed devices sorted by update exposure.">
         <div className="space-y-0">
           <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border">
             <span className="col-span-3">Device</span>
             <span className="col-span-3">OS</span>
             <span className="col-span-2 text-center">Missing Critical</span>
             <span className="col-span-2 text-center">Missing Total</span>
-            <span className="col-span-2 text-right">Last Check</span>
+            <span className="col-span-2 text-right">Update state</span>
           </div>
           {devicesSorted.map(d => (
             <div key={d.id} className="grid grid-cols-12 px-3 py-2.5 items-center border-b border-border last:border-0 hover:bg-surface-hover transition-colors text-[13px]">
@@ -221,8 +262,9 @@ export function PatchCompliancePage() {
               >
                 {d.patchStatus.missingTotal}
               </span>
-              <span className="col-span-2 text-right text-muted-foreground text-[11px]">
-                {format(new Date(d.patchStatus.lastUpdateCheck), 'MMM d, HH:mm')}
+              <span className="col-span-2 text-right text-[11px]" style={{ color: getUpdateState(d).color }}>
+                {getUpdateState(d).label}
+                <span className="block text-muted-foreground">{format(new Date(d.patchStatus.lastUpdateCheck), 'MMM d, HH:mm')}</span>
               </span>
             </div>
           ))}

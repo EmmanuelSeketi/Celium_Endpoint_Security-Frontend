@@ -76,6 +76,11 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({})) as ApiError
+    if (response.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('fleet-api-token')
+      localStorage.removeItem('fleet-admin')
+      window.dispatchEvent(new Event('fleet-auth-expired'))
+    }
     throw new Error(error.message ?? error.error ?? 'Unable to reach the local backend')
   }
 

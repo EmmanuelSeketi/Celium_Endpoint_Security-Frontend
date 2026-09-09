@@ -1,6 +1,7 @@
 'use client'
 
 import { SidebarProvider, useSidebar } from '@/lib/sidebar-context'
+import { AuthGate } from '@/components/auth/auth-gate'
 import { Sidebar } from './sidebar'
 import { Header } from './header'
 import { cn } from '@/lib/utils'
@@ -20,8 +21,10 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <SidebarProvider>
-      <Shell>{children}</Shell>
-    </SidebarProvider>
+    <AuthGate>
+      <SidebarProvider>
+        <Shell>{children}</Shell>
+      </SidebarProvider>
+    </AuthGate>
   )
 }

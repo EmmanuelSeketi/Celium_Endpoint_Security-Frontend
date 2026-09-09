@@ -24,12 +24,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
+    function handleAuthExpired() {
+      setAdmin(null)
+      setError('Your session expired. Please sign in again.')
+      setState('signed-out')
+    }
+
+    window.addEventListener('fleet-auth-expired', handleAuthExpired)
+
     const storedToken = localStorage.getItem(TOKEN_KEY)
     const storedAdmin = localStorage.getItem(ADMIN_KEY)
     if (storedToken && storedAdmin) {
       setAdmin(JSON.parse(storedAdmin) as Admin)
       setState('signed-in')
-      return
+      return () => window.removeEventListener('fleet-auth-expired', handleAuthExpired)
     }
 
     getSetupStatus()
@@ -38,6 +46,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setError(requestError instanceof Error ? requestError.message : 'Unable to reach the local backend')
         setState('unavailable')
       })
+
+      return () => window.removeEventListener('fleet-auth-expired', handleAuthExpired)
   }, [])
 
   async function register(input: { name: string; email: string; password: string }) {

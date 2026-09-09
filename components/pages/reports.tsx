@@ -14,7 +14,7 @@ const TYPE_COLORS: Record<ReportTemplate['type'], string> = {
   'Compliance Detail': '#008080',
   'AD Security': '#8B7FE8',
   'Malware Summary': '#E87F9B',
-  'Patch Status': '#7FC4E8',
+  'OS Updates': '#7FC4E8',
 }
 
 const REPORT_TYPES: ReportTemplate['type'][] = [
@@ -22,7 +22,7 @@ const REPORT_TYPES: ReportTemplate['type'][] = [
   'Compliance Detail',
   'AD Security',
   'Malware Summary',
-  'Patch Status',
+  'OS Updates',
 ]
 
 function FormatIcon({ format }: { format: 'PDF' | 'CSV' }) {

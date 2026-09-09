@@ -15,13 +15,13 @@ import {
 } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { label: 'Dashboard', href: '/', icon: LayoutDashboard, iconSrc: '/dashboard.png' },
-  { label: 'Devices', href: '/devices', icon: Laptop, iconSrc: '/devices.png' },
-  { label: 'Active Directory', href: '/active-directory', icon: Network, iconSrc: '/active-directory.png' },
-  { label: 'Malware Protection', href: '/malware-protection', icon: ShieldAlert, iconSrc: '/malware.png' },
-  { label: 'Patch Compliance', href: '/patch-compliance', icon: RefreshCw, iconSrc: '/software-patch.png' },
-  { label: 'Checks', href: '/checks', icon: ListChecks, iconSrc: '/checks.png' },
-  { label: 'Reports', href: '/reports', icon: FileText, iconSrc: '/report.png' },
+  { label: 'Dashboard', href: '/', icon: LayoutDashboard, iconSrc: '/SVG/sidebar/dashboard.svg' },
+  { label: 'Endpoints', href: '/devices', icon: Laptop, iconSrc: '/SVG/sidebar/devices.svg' },
+  { label: 'Malware Protection', href: '/malware-protection', icon: ShieldAlert, iconSrc: '/SVG/sidebar/malware.svg' },
+  { label: 'Active Directory', href: '/active-directory', icon: Network, iconSrc: '/SVG/sidebar/active-directory.svg' },
+  { label: 'OS Updates', href: '/patch-compliance', icon: RefreshCw, iconSrc: '/SVG/sidebar/software-patch.svg' },
+  { label: 'Checks', href: '/checks', icon: ListChecks, iconSrc: '/SVG/sidebar/checks.svg' },
+  { label: 'Reports', href: '/reports', icon: FileText, iconSrc: '/SVG/sidebar/report.svg' },
 ]
 
 const BOTTOM_ITEMS = [
@@ -67,8 +67,8 @@ export function Sidebar() {
                     <span
                       aria-hidden="true"
                       className={cn(
-                        'h-3.5 w-3.5 shrink-0 bg-current',
-                        active ? 'text-brand' : 'text-foreground group-hover:text-foreground'
+                        'w-7 shrink-0 bg-current text-black dark:text-white',
+                        label === 'Malware Protection' ? 'h-7' : label === 'OS Updates' ? 'h-5' : label === 'Checks' || label === 'Dashboard' || label === 'Endpoints' ? 'h-4' : 'h-5'
                       )}
                       style={{
                         maskImage: `url(${iconSrc})`,
@@ -77,8 +77,9 @@ export function Sidebar() {
                         WebkitMaskRepeat: 'no-repeat',
                         maskPosition: 'center',
                         WebkitMaskPosition: 'center',
-                        maskSize: '140%',
-                        WebkitMaskSize: '140%',
+                        maskSize: 'contain',
+                        WebkitMaskSize: 'contain',
+                        filter: 'drop-shadow(0 0 0.45px currentColor)',
                       }}
                     />
                   ) : (
