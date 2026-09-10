@@ -167,20 +167,20 @@ export function OverviewPage() {
   const heatmapData = departments.map(() => categories.map(() => 0))
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         title="Dashboard"
         description="Fleet compliance summary."
       />
 
       {/* KPI Row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <KpiCard
           label="Average Fleet Health"
           value={`${averageFleetHealth}%`}
           accentColor={healthColor}
           description={
-            <span className="inline-flex items-center gap-1.5">
+            <span className="inline-flex items-center gap-1.5 text-[12px] font-medium">
               <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: healthColor }} />
               {healthLabel}
             </span>
@@ -189,13 +189,13 @@ export function OverviewPage() {
 
         <KpiCard
           label="Total Devices"
-          childrenClassName="mt-0"
+          childrenClassName="mt-1"
         >
           <div className="flex items-start justify-between gap-4">
-            <span className="text-[30px] font-semibold leading-none tabular-nums text-black dark:text-white">
+            <span className="text-[34px] font-semibold tracking-[-0.02em] leading-none tabular-nums text-black dark:text-white">
               {totalDevices}
             </span>
-            <div className="flex w-[54%] min-w-0 flex-col gap-2 pt-1 text-[12px] font-medium text-black dark:text-white">
+            <div className="flex w-[56%] min-w-0 flex-col gap-2.5 pt-0.5 text-[12px] font-medium text-black dark:text-white">
               {[
                 { label: 'Healthy', count: displaySummary.compliant_count, color: 'bg-[var(--category-1)]' },
                 { label: 'Warning', count: displaySummary.non_compliant, color: 'bg-status-warning' },
@@ -206,7 +206,7 @@ export function OverviewPage() {
                     <span>{item.label}</span>
                     <span className="font-mono">{item.count}</span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
                     <div
                       className={`h-full rounded-full ${item.color}`}
                       style={{ width: `${Math.max((item.count / Math.max(totalDevices, 1)) * 100, item.count > 0 ? 8 : 0)}%` }}
@@ -220,13 +220,13 @@ export function OverviewPage() {
 
         <KpiCard
           label="Needing Attention"
-          childrenClassName="mt-0"
+          childrenClassName="mt-1"
         >
           <div className="flex items-start justify-between gap-4">
-            <span className="text-[30px] font-semibold leading-none tabular-nums text-black dark:text-white">
+            <span className="text-[34px] font-semibold tracking-[-0.02em] leading-none tabular-nums text-black dark:text-white">
               {devicesNeedingAttention}
             </span>
-            <div className="flex w-[54%] min-w-0 flex-col gap-2 pt-1 text-[12px] font-medium text-black dark:text-white">
+            <div className="flex w-[56%] min-w-0 flex-col gap-2.5 pt-0.5 text-[12px] font-medium text-black dark:text-white">
               {[
                 { label: 'Failed', count: devicesNeedingAttention, color: 'bg-status-warning', width: `${Math.max((devicesNeedingAttention / Math.max(devicesNeedingAttention + errors, 1)) * 100, 8)}%` },
                 { label: 'Errors', count: errors, color: 'bg-status-critical', width: `${Math.max((errors / Math.max(devicesNeedingAttention + errors, 1)) * 100, 8)}%` },
@@ -236,7 +236,7 @@ export function OverviewPage() {
                     <span>{item.label}</span>
                     <span className="font-mono">{item.count}</span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                  <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted/50">
                     <div className={`h-full rounded-full ${item.color}`} style={{ width: item.width }} />
                   </div>
                 </div>
@@ -253,12 +253,12 @@ export function OverviewPage() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 items-stretch gap-4 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-2">
         {/* Category Health Row */}
-        <div className="order-3 grid grid-cols-1 gap-3 xl:col-span-2 lg:grid-cols-3">
+        <div className="order-3 grid grid-cols-1 gap-4 xl:col-span-2 lg:grid-cols-3">
           <Link href="/active-directory" className="block group">
-            <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
-              <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Active Directory</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
+            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
+              <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Active Directory</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Domain Controllers</span><span className="text-black dark:text-white tabular-nums">0/0 healthy</span></div>
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Failed logons (24h)</span><span className="text-black dark:text-white tabular-nums">0</span></div>
@@ -268,8 +268,8 @@ export function OverviewPage() {
           </Link>
 
           <Link href="/malware-protection" className="block group">
-            <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
-              <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Malware Protection</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
+            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
+              <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Malware Protection</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
@@ -279,8 +279,8 @@ export function OverviewPage() {
           </Link>
 
           <Link href="/patch-compliance" className="block group">
-            <div className="relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card px-4 pb-4 pt-0 hover:border-brand/50 hover:bg-surface-hover transition-colors">
-              <div className="-mx-4 mb-3 flex items-center justify-between border-b border-border px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">OS Updates</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
+            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
+              <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">OS Updates</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">0</span></div>
@@ -373,16 +373,16 @@ export function OverviewPage() {
         {/* Right Column */}
         <div className="contents">
           {/* Compliance by OS */}
-          <SectionCard title="Average Compliance Score by OS" description="Average percentage across devices in each operating system." titleClassName="text-[13px] text-black dark:text-white" className="order-1 h-full">
-            <OSComplianceBarChart data={osByScore} height={180} />
+          <SectionCard title="Average Compliance Score by OS" description="Average percentage across devices in each operating system." titleClassName="text-[13px] font-semibold text-black dark:text-white" className="order-1 h-full">
+            <OSComplianceBarChart data={osByScore} height={190} />
           </SectionCard>
 
           {/* Top Failing Checks */}
-          <SectionCard title="Top Failing Checks" titleClassName="text-[13px] text-black dark:text-white" className="order-2 h-full">
+          <SectionCard title="Top Failing Checks" titleClassName="text-[13px] font-semibold text-black dark:text-white" className="order-2 h-full">
             {topFailingChecks.length === 0 ? (
               <p className="text-[12px] text-muted-foreground py-4 text-center">No failing checks found.</p>
             ) : (
-              <FailingChecksPieChart data={topFailingChecks} height={180} />
+              <FailingChecksPieChart data={topFailingChecks} height={190} />
             )}
           </SectionCard>
 

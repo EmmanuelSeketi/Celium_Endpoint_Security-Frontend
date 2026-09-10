@@ -79,7 +79,7 @@ export function Header() {
       <div className="relative">
         <button
           onClick={() => { setDateOpen(!dateOpen); setNotiOpen(false) }}
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[13px] text-black hover:text-black hover:bg-surface-hover transition-colors border border-border"
+          className="flex items-center gap-2 px-2.5 py-1.5 rounded-full text-[13px] text-black hover:text-black dark:text-white dark:hover:text-white hover:bg-surface-hover transition-colors border border-border"
         >
           <img src="/calendar.png" alt="" width={13} height={13} className="object-contain dark:invert" />
           <span>{dateRange}</span>

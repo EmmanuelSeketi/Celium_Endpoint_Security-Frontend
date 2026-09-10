@@ -167,6 +167,7 @@ export interface Detection {
   deviceId: string
   deviceName: string
   threatName: string
+  severity: 'low' | 'moderate' | 'high' | 'severe'
   filePath: string
   action: 'quarantined' | 'deleted' | 'blocked' | 'allowed'
   hash: string

@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Network, CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, ArrowDownRight, Users, Clock, Eye, X } from 'lucide-react'
+import { CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, ArrowDownRight, Users, Clock, Eye, X } from 'lucide-react'
 import { adDomainStatus, authActivityTrend } from '@/lib/mock-data'
 import type { ADAccountRecord, KerberosEventRecord } from '@/lib/types'
 import { PageHeader } from '@/components/ui/page-header'
@@ -118,39 +118,49 @@ export function ActiveDirectoryPage() {
 
       {/* Domain Controllers */}
       <SectionCard title="Domain Controllers">
-        <div className="space-y-2">
-          {domainControllers.map(dc => (
-            <div key={dc.name} className="flex items-center justify-between bg-surface border border-border rounded-md px-4 py-3">
-              <div className="flex items-center gap-3">
-                <Network size={16} strokeWidth={1.5} className={dc.online ? 'text-[#008080]' : 'text-[#F04438]'} />
-                <div>
-                  <p className="font-mono text-[12px] font-semibold text-foreground">{dc.name}</p>
-                  <p className="text-[12px] text-muted-foreground">{dc.site}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-1.5">
-                  {dc.online
-                    ? <CheckCircle2 size={13} strokeWidth={2} className="text-[#008080]" />
-                    : <XCircle size={13} strokeWidth={2} className="text-[#F04438]" />}
-                  <span className={cn('text-[12px] font-medium', dc.online ? 'text-[#008080]' : 'text-[#F04438]')}>
-                    {dc.online ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5">
-                  {dc.replicationHealthy
-                    ? <CheckCircle2 size={13} strokeWidth={2} className="text-[#008080]" />
-                    : <AlertTriangle size={13} strokeWidth={2} className="text-[#F79009]" />}
-                  <span className={cn('text-[12px] font-medium', dc.replicationHealthy ? 'text-[#008080]' : 'text-[#F79009]')}>
-                    {dc.replicationHealthy ? 'Replication OK' : 'Replication Issue'}
-                  </span>
-                </div>
-                <div className="text-[12px] font-medium text-muted-foreground hidden md:block">
-                  Last replicated {formatDistanceToNow(new Date(dc.lastReplication), { addSuffix: true })}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+          <table className="w-full min-w-[680px] table-fixed text-left text-[12px]">
+            <colgroup>
+              <col className="w-[30%]" />
+              <col className="w-[18%]" />
+              <col className="w-[17%]" />
+              <col className="w-[20%]" />
+              <col className="w-[15%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
+                <th className="px-3 py-2">Controller</th>
+                <th className="px-3 py-2">Site</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Replication</th>
+                <th className="px-3 py-2">Last Replicated</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {domainControllers.map(dc => (
+                <tr key={dc.name} className="transition-colors hover:bg-surface-hover">
+                  <td className="px-3 py-2.5">
+                    <span className="truncate font-mono font-semibold text-foreground">{dc.name}</span>
+                  </td>
+                  <td className="truncate px-3 py-2.5 text-black dark:text-white">{dc.site}</td>
+                  <td className="px-3 py-2.5">
+                    <span className={cn('inline-flex items-center gap-1.5 font-medium', dc.online ? 'text-black dark:text-white' : 'text-[#F04438]')}>
+                      <span className={cn('h-[7px] w-[7px] shrink-0 rounded-full', dc.online ? 'bg-status-good' : 'bg-[#F04438]')} />
+                      {dc.online ? 'Online' : 'Offline'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5">
+                    <span className={cn('font-medium', dc.replicationHealthy ? 'text-[#2563EB]' : 'text-[#F79009]')}>
+                      {dc.replicationHealthy ? 'Replication OK' : 'Replication Issue'}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2.5 text-black dark:text-white">
+                    {formatDistanceToNow(new Date(dc.lastReplication), { addSuffix: true })}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
 
@@ -177,7 +187,7 @@ export function ActiveDirectoryPage() {
                 <Legend
                   formatter={(v) => <span style={{ color: '#9AA3AF', fontSize: 11 }}>{v}</span>}
                 />
-                <Bar dataKey="successful" name="Successful" fill="#008080" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="successful" name="Successful" fill="var(--status-good)" radius={[2, 2, 0, 0]} />
                 <Bar dataKey="failed" name="Failed" fill="#F04438" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
@@ -214,7 +224,7 @@ export function ActiveDirectoryPage() {
                     {ANOMALY_LABELS[a.type] ?? a.type}
                   </p>
                   <p className="font-mono text-[12px] font-medium text-muted-foreground mt-0.5">{a.account}</p>
-                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-brand"><Eye size={12} /> View event details</span>
+                  <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-black dark:text-white"><Eye size={12} /> View event details</span>
                 </button>
               ))}
             </div>
@@ -224,21 +234,32 @@ export function ActiveDirectoryPage() {
 
       {/* Backend-ready historical records */}
       <SectionCard title="Stale Accounts" description="Accounts with no successful logon for 90+ days. Select a record to inspect its directory source and account attributes.">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-[12px]">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+          <table className="w-full min-w-[640px] table-fixed text-left text-[12px]">
+            <colgroup>
+              <col className="w-[28%]" />
+              <col className="w-[17%]" />
+              <col className="w-[22%]" />
+              <col className="w-[21%]" />
+              <col className="w-[12%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-border text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2">Account</th><th className="px-3 py-2">Type</th><th className="px-3 py-2">Last logon</th><th className="px-3 py-2">Source DC</th><th className="px-3 py-2" />
+              <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
+                <th className="px-3 py-2">Account</th>
+                <th className="px-3 py-2">Type</th>
+                <th className="px-3 py-2">Last Logon</th>
+                <th className="px-3 py-2">Source DC</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {adDomainStatus.staleAccountRecords.map(account => (
-                <tr key={account.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                  <td className="px-3 py-2.5 font-mono font-semibold text-foreground">{account.accountName}</td>
-                  <td className="px-3 py-2.5 capitalize text-muted-foreground">{account.accountType}</td>
-                  <td className="px-3 py-2.5 text-muted-foreground">{formatDistanceToNow(new Date(account.lastLogon), { addSuffix: true })}</td>
-                  <td className="px-3 py-2.5 font-mono text-muted-foreground">{account.sourceDomainController}</td>
-                  <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => setSelectedStaleAccount(account)} className="inline-flex items-center gap-1 text-brand hover:underline"><Eye size={13} /> Details</button></td>
+                <tr key={account.id} className="transition-colors hover:bg-surface-hover">
+                  <td className="px-3 py-2.5 font-mono font-semibold text-black dark:text-white">{account.accountName}</td>
+                  <td className="px-3 py-2.5 capitalize text-black dark:text-white">{account.accountType}</td>
+                  <td className="px-3 py-2.5 text-black dark:text-white">{formatDistanceToNow(new Date(account.lastLogon), { addSuffix: true })}</td>
+                  <td className="px-3 py-2.5 font-mono text-black dark:text-white">{account.sourceDomainController}</td>
+                  <td className="px-3 py-2.5"><button type="button" onClick={() => setSelectedStaleAccount(account)} className="inline-flex items-center gap-1 text-black dark:text-white hover:underline"><Eye size={13} /> Details</button></td>
                 </tr>
               ))}
             </tbody>
@@ -247,22 +268,35 @@ export function ActiveDirectoryPage() {
       </SectionCard>
 
       <SectionCard title="Kerberos Event History" description="Normalized domain-controller security events retained for investigation and correlation.">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-[12px]">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+          <table className="w-full min-w-[760px] table-fixed text-left text-[12px]">
+            <colgroup>
+              <col className="w-[16%]" />
+              <col className="w-[17%]" />
+              <col className="w-[19%]" />
+              <col className="w-[20%]" />
+              <col className="w-[18%]" />
+              <col className="w-[10%]" />
+            </colgroup>
             <thead>
-              <tr className="border-b border-border text-left text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-3 py-2">Time</th><th className="px-3 py-2">Event</th><th className="px-3 py-2">Account</th><th className="px-3 py-2">Client</th><th className="px-3 py-2">Source DC</th><th className="px-3 py-2" />
+              <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
+                <th className="px-3 py-2">Time</th>
+                <th className="px-3 py-2">Event</th>
+                <th className="px-3 py-2">Account</th>
+                <th className="px-3 py-2">Client</th>
+                <th className="px-3 py-2">Source DC</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-border">
               {adDomainStatus.kerberosEvents.map(event => (
-                <tr key={event.id} className="border-b border-border last:border-0 hover:bg-surface-hover">
-                  <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">{formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}</td>
-                  <td className="px-3 py-2.5 font-mono font-semibold text-foreground">{event.eventId}</td>
-                  <td className="px-3 py-2.5 font-mono text-foreground">{event.account}</td>
-                  <td className="px-3 py-2.5 font-mono text-muted-foreground">{event.clientHost}</td>
-                  <td className="px-3 py-2.5 font-mono text-muted-foreground">{event.sourceDomainController}</td>
-                  <td className="px-3 py-2.5 text-right"><button type="button" onClick={() => setSelectedKerberosEvent(event)} className="inline-flex items-center gap-1 text-brand hover:underline"><Eye size={13} /> Details</button></td>
+                <tr key={event.id} className="transition-colors hover:bg-surface-hover">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-black dark:text-white">{formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}</td>
+                  <td className="px-3 py-2.5 font-mono font-semibold text-black dark:text-white">{event.eventId}</td>
+                  <td className="px-3 py-2.5 font-mono text-black dark:text-white">{event.account}</td>
+                  <td className="px-3 py-2.5 font-mono text-black dark:text-white">{event.clientHost}</td>
+                  <td className="px-3 py-2.5 font-mono text-black dark:text-white">{event.sourceDomainController}</td>
+                  <td className="px-3 py-2.5"><button type="button" onClick={() => setSelectedKerberosEvent(event)} className="inline-flex items-center gap-1 text-black dark:text-white hover:underline"><Eye size={13} /> Details</button></td>
                 </tr>
               ))}
             </tbody>
@@ -272,33 +306,47 @@ export function ActiveDirectoryPage() {
 
       {/* Privileged Group Changes */}
       <SectionCard title="Privileged Group Changes" description="Recent modifications to high-privilege AD groups.">
-        <div className="space-y-0">
-          <div className="grid grid-cols-4 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground border-b border-border">
-            <span>Time</span>
-            <span>Account</span>
-            <span>Group</span>
-            <span>Action</span>
-          </div>
-          {privilegedGroupChanges.map((change, i) => (
-            <div key={i} className="grid grid-cols-4 px-3 py-2.5 text-[12px] font-medium border-b border-border last:border-0 hover:bg-surface-hover transition-colors items-center">
-              <span className="text-muted-foreground text-[12px]">
-                {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
-              </span>
-              <span className="font-mono font-semibold text-foreground text-[12px]">{change.account}</span>
-              <span className="text-muted-foreground text-[12px]">{change.group}</span>
-              <div className="flex items-center gap-1.5">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+          <table className="w-full min-w-[640px] table-fixed text-left text-[12px]">
+            <colgroup>
+              <col className="w-[22%]" />
+              <col className="w-[28%]" />
+              <col className="w-[30%]" />
+              <col className="w-[20%]" />
+            </colgroup>
+            <thead>
+              <tr className="border-b border-border text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
+                <th className="px-3 py-2">Time</th>
+                <th className="px-3 py-2">Account</th>
+                <th className="px-3 py-2">Group</th>
+                <th className="px-3 py-2">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {privilegedGroupChanges.map((change, i) => (
+                <tr key={i} className="transition-colors hover:bg-surface-hover">
+                  <td className="whitespace-nowrap px-3 py-2.5 text-black dark:text-white">
+                    {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
+                  </td>
+                  <td className="px-3 py-2.5 font-mono font-semibold text-black dark:text-white">{change.account}</td>
+                  <td className="px-3 py-2.5 text-black dark:text-white">{change.group}</td>
+                  <td className="px-3 py-2.5">
+                    <div className="flex items-center gap-1.5">
                 {change.action === 'added'
                   ? <ArrowUpRight size={13} strokeWidth={2} className="text-[#F04438]" />
-                  : <ArrowDownRight size={13} strokeWidth={2} className="text-[#008080]" />}
-                <span className={cn('text-[12px] font-medium capitalize', change.action === 'added' ? 'text-[#F04438]' : 'text-[#008080]')}>
+                  : <ArrowDownRight size={13} strokeWidth={2} className="text-black dark:text-white" />}
+                <span className={cn('text-[12px] font-medium capitalize', change.action === 'added' ? 'text-[#F04438]' : 'text-black dark:text-white')}>
                   {change.action}
                 </span>
                 {change.source && (
-                  <span className="text-[11px] text-muted-foreground ml-1">via {change.source}</span>
+                  <span className="ml-1 text-[11px] text-black dark:text-white">via {change.source}</span>
                 )}
-              </div>
-            </div>
-          ))}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </SectionCard>
 

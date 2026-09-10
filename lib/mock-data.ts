@@ -364,11 +364,11 @@ export const missingPatches: MissingPatch[] = [
 
 // ─── Detections ───────────────────────────────────────────────────────────────
 export const detections: Detection[] = [
-  { id: 'det-001', timestamp: minutesAgo(12), deviceId: 'dev-005', deviceName: 'NYC-LT-0201', threatName: 'Trojan:Win32/Qakbot.GE', filePath: 'C:\\Users\\m.kim\\AppData\\Local\\Temp\\svchost_upd.exe', action: 'quarantined', hash: '4a8e2b1f9c3d7e5a2b4c8f1e9d3a7b5c2e4f8a1b' },
-  { id: 'det-002', timestamp: hoursAgo(3), deviceId: 'dev-010', deviceName: 'SF-WKS-0104', threatName: 'HackTool:Win32/Mimikatz.C', filePath: 'C:\\Temp\\tools\\m.exe', action: 'blocked', hash: '7c2e5f9a1b4d8e3c6f2a9d5b8e1c4f7a2d5e8b1c' },
-  { id: 'det-003', timestamp: hoursAgo(4), deviceId: 'dev-015', deviceName: 'SF-WKS-0199', threatName: 'Ransomware:Win32/Ryuk.B!dll', filePath: 'C:\\Users\\b.thompson\\Downloads\\invoice_052024.exe', action: 'quarantined', hash: '2d8f5a1c9e4b7d3a6c2f5e8b1d4a7c3e6f9b2d5a' },
-  { id: 'det-004', timestamp: daysAgo(1), deviceId: 'dev-002', deviceName: 'NYC-LT-0087', threatName: 'Adware:Win32/Adposhel.I', filePath: 'C:\\Program Files (x86)\\UpdateHelper\\updater.exe', action: 'allowed', hash: '9b3d6f1a4c8e2b5f8a3d6c1e4b7f2a5c8d3e6b1a' },
-  { id: 'det-005', timestamp: daysAgo(2), deviceId: 'dev-015', deviceName: 'SF-WKS-0199', threatName: 'Exploit:Win32/CVE-2024-21338', filePath: 'C:\\Windows\\Temp\\spool.dll', action: 'deleted', hash: '1e4a7c2f5b8d3a6e9c1f4b7d2a5c8e3b6f1a4c7d' },
+  { id: 'det-001', timestamp: minutesAgo(12), deviceId: 'dev-005', deviceName: 'NYC-LT-0201', threatName: 'Trojan:Win32/Qakbot.GE', severity: 'high', filePath: 'C:\\Users\\m.kim\\AppData\\Local\\Temp\\svchost_upd.exe', action: 'quarantined', hash: '4a8e2b1f9c3d7e5a2b4c8f1e9d3a7b5c2e4f8a1b' },
+  { id: 'det-002', timestamp: hoursAgo(3), deviceId: 'dev-010', deviceName: 'SF-WKS-0104', threatName: 'HackTool:Win32/Mimikatz.C', severity: 'moderate', filePath: 'C:\\Temp\\tools\\m.exe', action: 'blocked', hash: '7c2e5f9a1b4d8e3c6f2a9d5b8e1c4f7a2d5e8b1c' },
+  { id: 'det-003', timestamp: hoursAgo(4), deviceId: 'dev-015', deviceName: 'SF-WKS-0199', threatName: 'Ransomware:Win32/Ryuk.B!dll', severity: 'severe', filePath: 'C:\\Users\\b.thompson\\Downloads\\invoice_052024.exe', action: 'quarantined', hash: '2d8f5a1c9e4b7d3a6c2f5e8b1d4a7c3e6f9b2d5a' },
+  { id: 'det-004', timestamp: daysAgo(1), deviceId: 'dev-002', deviceName: 'NYC-LT-0087', threatName: 'Adware:Win32/Adposhel.I', severity: 'low', filePath: 'C:\\Program Files (x86)\\UpdateHelper\\updater.exe', action: 'allowed', hash: '9b3d6f1a4c8e2b5f8a3d6c1e4b7f2a5c8d3e6b1a' },
+  { id: 'det-005', timestamp: daysAgo(2), deviceId: 'dev-015', deviceName: 'SF-WKS-0199', threatName: 'Exploit:Win32/CVE-2024-21338', severity: 'high', filePath: 'C:\\Windows\\Temp\\spool.dll', action: 'deleted', hash: '1e4a7c2f5b8d3a6e9c1f4b7d2a5c8e3b6f1a4c7d' },
 ]
 
 // ─── Quarantine Items ─────────────────────────────────────────────────────────
