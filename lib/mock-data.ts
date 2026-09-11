@@ -1,7 +1,6 @@
 import type {
   Device,
   ComplianceCheck,
-  ADDomainStatus,
   Alert,
   ScanActivity,
   MissingPatch,
@@ -11,6 +10,7 @@ import type {
   ADAccountRecord,
   KerberosEventRecord,
 } from './types'
+import type { ADDomainStatus } from './api-client'
 
 // ─── Devices ──────────────────────────────────────────────────────────────────
 const now = new Date()
@@ -260,57 +260,57 @@ export const complianceChecks: ComplianceCheck[] = [
 
 // ─── AD Domain Status ─────────────────────────────────────────────────────────
 export const adDomainStatus: ADDomainStatus = {
-  domainControllers: [
-    { name: 'NYC-DC-01', site: 'NYC-Primary', online: true, replicationHealthy: true, lastReplication: minutesAgo(8) },
-    { name: 'NYC-DC-02', site: 'NYC-Primary', online: true, replicationHealthy: true, lastReplication: minutesAgo(12) },
-    { name: 'NYC-DC-03', site: 'NYC-DR', online: true, replicationHealthy: false, lastReplication: hoursAgo(2) },
+  domain_controllers: [
+    { id: 'dc-001', name: 'NYC-DC-01', site: 'NYC-Primary', online: true, replication_healthy: true, last_replication: minutesAgo(8) },
+    { id: 'dc-002', name: 'NYC-DC-02', site: 'NYC-Primary', online: true, replication_healthy: true, last_replication: minutesAgo(12) },
+    { id: 'dc-003', name: 'NYC-DC-03', site: 'NYC-DR', online: true, replication_healthy: false, last_replication: hoursAgo(2) },
   ],
-  failedLogons24h: 47,
-  successfulLogons24h: 1284,
-  privilegedGroupChanges: [
-    { timestamp: hoursAgo(14), account: 'j.chen', group: 'Domain Admins', action: 'added', source: 'NYC-DC-01' },
-    { timestamp: daysAgo(3), account: 'temp.admin', group: 'Enterprise Admins', action: 'removed', source: 'NYC-DC-01' },
-    { timestamp: daysAgo(5), account: 'svc.deploy', group: 'Administrators', action: 'added', source: 'NYC-DC-02' },
+  failed_logons_24h: 47,
+  successful_logons_24h: 1284,
+  privileged_group_changes: [
+    { id: 'pgc-001', timestamp: hoursAgo(14), account: 'j.chen', group_name: 'Domain Admins', action: 'added', source: 'NYC-DC-01' },
+    { id: 'pgc-002', timestamp: daysAgo(3), account: 'temp.admin', group_name: 'Enterprise Admins', action: 'removed', source: 'NYC-DC-01' },
+    { id: 'pgc-003', timestamp: daysAgo(5), account: 'svc.deploy', group_name: 'Administrators', action: 'added', source: 'NYC-DC-02' },
   ],
-  kerberosAnomalies: [
+  kerberos_anomalies: [
     { type: 'kerberoasting', account: 'svc.sql', timestamp: hoursAgo(6), severity: 'critical' },
     { type: 'as_rep_roasting', account: 'p.nguyen', timestamp: daysAgo(2), severity: 'warning' },
   ],
-  staleAccounts: 11,
-  staleAccountRecords: [
+  stale_accounts: 11,
+  stale_account_records: [
     {
-      id: 'ad-account-001', accountName: 'svc.legacy-backup', displayName: 'Legacy Backup Service', accountType: 'service',
-      organizationalUnit: 'OU=Service Accounts,DC=corp,DC=local', enabled: true, lastLogon: daysAgo(128),
-      passwordLastSet: daysAgo(220), passwordNeverExpires: true, distinguishedName: 'CN=svc.legacy-backup,OU=Service Accounts,DC=corp,DC=local',
-      sourceDomainController: 'NYC-DC-01', stale: true,
+      id: 'ad-account-001', account_name: 'svc.legacy-backup', display_name: 'Legacy Backup Service', account_type: 'service',
+      organizational_unit: 'OU=Service Accounts,DC=corp,DC=local', enabled: true, last_logon: daysAgo(128),
+      password_last_set: daysAgo(220), password_never_expires: true, distinguished_name: 'CN=svc.legacy-backup,OU=Service Accounts,DC=corp,DC=local',
+      source_domain_controller: 'NYC-DC-01', stale: true,
     },
     {
-      id: 'ad-account-002', accountName: 'j.williams', displayName: 'Jordan Williams', accountType: 'user',
-      organizationalUnit: 'OU=Finance,DC=corp,DC=local', enabled: true, lastLogon: daysAgo(96),
-      passwordLastSet: daysAgo(180), passwordNeverExpires: false, distinguishedName: 'CN=j.williams,OU=Finance,DC=corp,DC=local',
-      sourceDomainController: 'NYC-DC-02', stale: true,
+      id: 'ad-account-002', account_name: 'j.williams', display_name: 'Jordan Williams', account_type: 'user',
+      organizational_unit: 'OU=Finance,DC=corp,DC=local', enabled: true, last_logon: daysAgo(96),
+      password_last_set: daysAgo(180), password_never_expires: false, distinguished_name: 'CN=j.williams,OU=Finance,DC=corp,DC=local',
+      source_domain_controller: 'NYC-DC-02', stale: true,
     },
     {
-      id: 'ad-account-003', accountName: 'CHI-WKS-0044$', displayName: 'CHI-WKS-0044', accountType: 'computer',
-      organizationalUnit: 'OU=Workstations,DC=corp,DC=local', enabled: true, lastLogon: daysAgo(143),
-      passwordLastSet: daysAgo(143), passwordNeverExpires: true, distinguishedName: 'CN=CHI-WKS-0044,OU=Workstations,DC=corp,DC=local',
-      sourceDomainController: 'NYC-DC-03', stale: true,
+      id: 'ad-account-003', account_name: 'CHI-WKS-0044$', display_name: 'CHI-WKS-0044', account_type: 'computer',
+      organizational_unit: 'OU=Workstations,DC=corp,DC=local', enabled: true, last_logon: daysAgo(143),
+      password_last_set: daysAgo(143), password_never_expires: true, distinguished_name: 'CN=CHI-WKS-0044,OU=Workstations,DC=corp,DC=local',
+      source_domain_controller: 'NYC-DC-03', stale: true,
     },
   ],
-  kerberosEvents: [
+  kerberos_events: [
     {
-      id: 'kerb-event-001', eventId: 4769, activity: 'service_ticket_requested', account: 'svc.sql',
-      servicePrincipalName: 'MSSQLSvc/sql01.corp.local', clientHost: 'NYC-WKS-0087', clientIp: '10.0.1.87',
-      sourceDomainController: 'NYC-DC-01', timestamp: hoursAgo(6), severity: 'critical', detectionReason: 'Unusual service-ticket volume for a privileged service account',
+      id: 'kerb-event-001', event_id: 4769, activity: 'service_ticket_requested', account: 'svc.sql',
+      service_principal_name: 'MSSQLSvc/sql01.corp.local', client_host: 'NYC-WKS-0087', client_ip: '10.0.1.87',
+      source_domain_controller: 'NYC-DC-01', timestamp: hoursAgo(6), severity: 'critical', detection_reason: 'Unusual service-ticket volume for a privileged service account',
     },
     {
-      id: 'kerb-event-002', eventId: 4771, activity: 'pre_authentication_failed', account: 'p.nguyen',
-      clientHost: 'NYC-LT-0301', clientIp: '10.0.1.148', sourceDomainController: 'NYC-DC-02', timestamp: daysAgo(2), severity: 'warning',
-      detectionReason: 'Repeated pre-authentication failures from a new client host',
+      id: 'kerb-event-002', event_id: 4771, activity: 'pre_authentication_failed', account: 'p.nguyen',
+      client_host: 'NYC-LT-0301', client_ip: '10.0.1.148', source_domain_controller: 'NYC-DC-02', timestamp: daysAgo(2), severity: 'warning',
+      detection_reason: 'Repeated pre-authentication failures from a new client host',
     },
     {
-      id: 'kerb-event-003', eventId: 4768, activity: 'ticket_requested', account: 'j.chen',
-      clientHost: 'NYC-LT-0142', clientIp: '10.0.1.42', sourceDomainController: 'NYC-DC-01', timestamp: hoursAgo(14), severity: 'info',
+      id: 'kerb-event-003', event_id: 4768, activity: 'ticket_requested', account: 'j.chen',
+      client_host: 'NYC-LT-0142', client_ip: '10.0.1.42', source_domain_controller: 'NYC-DC-01', timestamp: hoursAgo(14), severity: 'info',
     },
   ],
 }

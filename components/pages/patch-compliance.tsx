@@ -1,9 +1,10 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { format } from 'date-fns'
-import { AlertTriangle, CheckCircle2, Clock, ExternalLink, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
-import { devices, missingPatches, getFleetStats } from '@/lib/mock-data'
+import { AlertTriangle, CheckCircle2, Clock, ExternalLink, Search, ShieldAlert, AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { devices as mockDevices, missingPatches as mockMissingPatches, getFleetStats } from '@/lib/mock-data'
+import type { Device, MissingPatch } from '@/lib/types'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -11,6 +12,8 @@ import { ComplianceBar } from '@/components/ui/compliance-bar'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { cn } from '@/lib/utils'
 import { CHART_GRID, STATUS_COLORS } from '@/lib/theme'
+import { useDataMode } from '@/lib/data-mode-provider'
+import { getDevices, getMissingPatches, getPatchStats, type ManagedDevice, type MissingPatch as MissingPatchApi } from '@/lib/api-client'
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; payload: { fill: string } }[]; label?: string }) {
   if (!active || !payload?.length) return null
@@ -45,20 +48,137 @@ function OSIcon({ os }: { os: 'Windows' | 'Mac' | 'Linux' }) {
   return <img src="/Linux.svg" width="16" height="16" alt="Linux" />
 }
 
-function getUpdateState(device: (typeof devices)[number]) {
-  if (device.patchStatus.osEol) return { label: 'End of support', color: STATUS_COLORS.critical }
-  if (device.patchStatus.pendingReboot) return { label: 'Restart required', color: STATUS_COLORS.warning }
-  if (device.patchStatus.missingCritical > 0) return { label: 'Security updates missing', color: STATUS_COLORS.critical }
-  if (device.patchStatus.missingTotal > 0) return { label: 'Updates available', color: STATUS_COLORS.warning }
-  return { label: 'Up to date', color: STATUS_COLORS.compliant }
+function getUpdateState(device: Device) {
+  if (device.patchStatus.osEol) return { label: 'End of support', color: STATUS_COLORS.critical, icon: AlertTriangle }
+  if (device.patchStatus.pendingReboot) return { label: 'Restart required', color: STATUS_COLORS.warning, icon: Clock }
+  if (device.patchStatus.missingCritical > 0) return { label: 'Security updates missing', color: STATUS_COLORS.critical, icon: ShieldAlert }
+  if (device.patchStatus.missingTotal > 0) return { label: 'Updates available', color: STATUS_COLORS.warning, icon: AlertCircle }
+  return { label: 'Up to date', color: STATUS_COLORS.compliant, icon: CheckCircle2 }
+}
+
+function getApiUpdateState(patchStatus: ManagedDevice['patch_status']) {
+  if (!patchStatus) return { label: 'Up to date', color: STATUS_COLORS.compliant, icon: CheckCircle2 }
+  if (patchStatus.os_eol) return { label: 'End of support', color: STATUS_COLORS.critical, icon: AlertTriangle }
+  if (patchStatus.pending_reboot) return { label: 'Restart required', color: STATUS_COLORS.warning, icon: Clock }
+  if (patchStatus.missing_critical > 0) return { label: 'Security updates missing', color: STATUS_COLORS.critical, icon: ShieldAlert }
+  if (patchStatus.missing_total > 0) return { label: 'Updates available', color: STATUS_COLORS.warning, icon: AlertCircle }
+  return { label: 'Up to date', color: STATUS_COLORS.compliant, icon: CheckCircle2 }
 }
 
 export function PatchCompliancePage() {
-  const stats = getFleetStats()
+  const { mode } = useDataMode()
+  const [apiDevices, setApiDevices] = useState<ManagedDevice[]>([])
+  const [apiMissingPatches, setApiMissingPatches] = useState<MissingPatchApi[]>([])
+  const [apiStats, setApiStats] = useState<{ total: number; patch_compliance: number; pending_reboot: number; eol_devices: number; critical_patches: number; missing_critical: number } | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [deviceSearch, setDeviceSearch] = useState('')
   const [updateStateFilter, setUpdateStateFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const pageSize = 8
+
+  useEffect(() => {
+    if (mode === 'demo') {
+      setApiDevices([])
+      setApiMissingPatches([])
+      setApiStats(null)
+      setLoadError(null)
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
+    Promise.all([getDevices(), getMissingPatches(), getPatchStats()])
+      .then(([devicesData, patchesData, statsData]) => {
+        if (cancelled) return
+        setApiDevices(Array.isArray(devicesData) ? devicesData : [])
+        setApiMissingPatches(Array.isArray(patchesData) ? patchesData : [])
+        setApiStats(statsData)
+      })
+      .catch(error => {
+        if (cancelled) return
+        setLoadError(error instanceof Error ? error.message : 'Unable to load patch data')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  const devices = useMemo(() => {
+    if (mode === 'demo') return mockDevices
+    return apiDevices.map<Device>(device => ({
+      id: device.id,
+      name: device.hostname,
+      assetType: 'laptop',
+      os: device.os === 'windows' ? 'Windows' : device.os === 'macos' ? 'Mac' : 'Linux',
+      osVersion: device.os_version,
+      department: '',
+      ip: device.ip_address,
+      mac: '',
+      username: '',
+      complianceScore: 0,
+      status: device.status === 'active' ? 'compliant' : device.status === 'inactive' ? 'warning' : 'critical',
+      failedChecks: 0,
+      passedChecks: 0,
+      lastSeen: device.last_checkin ?? '',
+      lastScanned: '',
+      malwareStatus: {
+        engineVersion: device.malware?.engine_version ?? '',
+        securityIntelligenceVersion: device.malware?.security_intelligence_version,
+        securityIntelligenceUpdatedAt: device.malware?.security_intelligence_updated_at,
+        definitionAge: device.malware?.definition_age ?? 0,
+        realtimeProtection: device.malware?.realtime_protection ?? false,
+        lastScanResult: (device.malware?.last_scan_result ?? 'clean') as Device['malwareStatus']['lastScanResult'],
+        lastScanAt: device.malware?.last_scan_at,
+        lastScanType: device.malware?.last_scan_type as Device['malwareStatus']['lastScanType'],
+        lastScanDurationSeconds: device.malware?.last_scan_duration_seconds,
+        lastScanFiles: device.malware?.last_scan_files,
+        tamperProtection: device.malware?.tamper_protection ?? false,
+        quarantineCount: device.malware?.quarantine_count ?? 0,
+      },
+      patchStatus: {
+        missingCritical: device.patch_status?.missing_critical ?? 0,
+        missingTotal: device.patch_status?.missing_total ?? 0,
+        pendingReboot: device.patch_status?.pending_reboot ?? false,
+        lastUpdateCheck: device.patch_status?.last_update_check ?? '',
+        osEol: device.patch_status?.os_eol ?? false,
+        eolDate: device.patch_status?.eol_date,
+      },
+      domainJoined: false,
+    }))
+  }, [mode, apiDevices])
+
+  const missingPatches = useMemo(() => {
+    if (mode === 'demo') return mockMissingPatches
+    return apiMissingPatches.map<MissingPatch>(patch => ({
+      id: patch.id,
+      kbId: patch.kb_id,
+      title: patch.title,
+      severity: patch.severity as MissingPatch['severity'],
+      affectedDevices: patch.affected_devices,
+      daysAvailable: patch.days_available,
+      cveReference: patch.cve_reference,
+    }))
+  }, [mode, apiMissingPatches])
+
+  const stats = useMemo(() => {
+    if (mode === 'demo') return getFleetStats()
+    if (!apiStats) return { total: 0, patchCompliance: 0, pendingReboot: 0, eolDevices: 0, criticalPatches: 0, missingCritical: 0 }
+    return {
+      total: apiStats.total,
+      patchCompliance: apiStats.patch_compliance,
+      pendingReboot: apiStats.pending_reboot,
+      eolDevices: apiStats.eol_devices,
+      criticalPatches: apiStats.critical_patches,
+      missingCritical: apiStats.missing_critical,
+    }
+  }, [mode, apiStats])
 
   const pendingReboot = devices.filter(d => d.patchStatus.pendingReboot).length
   const eolDevices = devices.filter(d => d.patchStatus.osEol)
@@ -103,7 +223,18 @@ export function PatchCompliancePage() {
         description="Update coverage, operating system lifecycle, and device update posture."
       />
 
-      {/* KPI row */}
+      {loading && (
+        <div className="flex items-center justify-center py-10 text-[13px] text-muted-foreground">Loading patch data...</div>
+      )}
+      {loadError && (
+        <div className="flex flex-col items-center justify-center gap-2 py-10 text-[13px] text-status-critical">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => mode !== 'demo' && window.location.reload()} className="rounded-md border border-border px-3 py-1.5 text-[12px] transition-colors hover:bg-surface-hover">Retry</button>
+        </div>
+      )}
+
+      {!loading && !loadError && (
+        <>
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {[
           {
@@ -311,11 +442,11 @@ export function PatchCompliancePage() {
               <span className="col-span-2">OS</span>
               <span className="col-span-2 text-center">Missing Critical</span>
               <span className="col-span-2 text-center">Missing Total</span>
-              <span className="col-span-3 pl-4">Update State</span>
+              <span className="col-span-3">Update State</span>
             </div>
             <div className="divide-y divide-border">
               {pagedDevices.map(d => (
-                <div key={d.id} className="grid grid-cols-12 items-center px-3 py-2.5 text-[13px] transition-colors hover:bg-surface-hover">
+                <div key={d.id} className="grid grid-cols-12 items-center px-3 py-2 text-[13px] transition-colors hover:bg-surface-hover">
                   <div className="col-span-3">
                     <span className="truncate font-mono text-[12px] text-black dark:text-white">{d.name}</span>
                   </div>
@@ -326,17 +457,20 @@ export function PatchCompliancePage() {
                   <span className={cn('col-span-2 text-center font-mono', d.patchStatus.missingTotal > 5 ? 'text-[#F79009]' : 'text-black dark:text-white')}>
                     {d.patchStatus.missingTotal}
                   </span>
-                  <span className="col-span-3 pl-4 text-left text-[11px]" style={{ color: getUpdateState(d).color }}>
-                    <span className="inline-flex items-center gap-1.5">
-                      {d.patchStatus.pendingReboot && (
-                        <Clock size={12} strokeWidth={1.5} className="shrink-0 text-[#F79009]" />
-                      )}
-                      {d.patchStatus.osEol && (
-                        <AlertTriangle size={12} strokeWidth={1.5} className="shrink-0 text-[#F04438]" />
-                      )}
-                      {getUpdateState(d).label}
-                    </span>
-                    <span className="block text-black dark:text-white">{format(new Date(d.patchStatus.lastUpdateCheck), 'MMM d, HH:mm')}</span>
+                  <span className="col-span-3">
+                    {(() => {
+                      const state = getUpdateState(d)
+                      const Icon = state.icon
+                      return (
+                        <span
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium"
+                          style={{ color: state.color, backgroundColor: `${state.color}1A` }}
+                        >
+                          <Icon size={12} strokeWidth={1.75} className="shrink-0" />
+                          {state.label}
+                        </span>
+                      )
+                    })()}
                   </span>
                 </div>
               ))}
@@ -361,6 +495,8 @@ export function PatchCompliancePage() {
           </div>
         </div>
       </SectionCard>
-    </div>
-  )
+       </>
+    )}
+  </div>
+)
 }

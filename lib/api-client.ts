@@ -26,6 +26,21 @@ type LoginResponse = {
   admin: Admin
 }
 
+export type MalwareStatusApi = {
+  engine_version?: string
+  security_intelligence_version?: string
+  security_intelligence_updated_at?: string
+  definition_age?: number
+  realtime_protection: boolean
+  last_scan_result: string
+  last_scan_at?: string
+  last_scan_type?: string
+  last_scan_duration_seconds?: number
+  last_scan_files?: number
+  tamper_protection: boolean
+  quarantine_count: number
+}
+
 export type ManagedDevice = {
   id: string
   device_id: string
@@ -36,6 +51,15 @@ export type ManagedDevice = {
   status: 'active' | 'inactive' | 'error'
   last_checkin?: string
   created_at: string
+  malware?: MalwareStatusApi
+  patch_status?: {
+    missing_critical: number
+    missing_total: number
+    pending_reboot: boolean
+    last_update_check?: string
+    os_eol: boolean
+    eol_date?: string
+  }
 }
 
 export type PostureSummary = {
@@ -141,6 +165,140 @@ export async function getSecurityChecks() {
 
 export async function getAlerts() {
   const result = await authenticatedRequest<ApiSuccess<Alert[]>>('/alerts')
+  return result.data
+}
+
+export type MalwareDetection = {
+  id: string
+  device_id: string
+  device_name: string
+  threat_name: string
+  file_path: string
+  action: string
+  hash: string
+  severity: string
+  timestamp: string
+}
+
+export type MalwareQuarantineItem = {
+  id: string
+  device_id: string
+  device_name: string
+  file_name: string
+  original_path: string
+  threat_name: string
+  quarantined_at: string
+}
+
+export async function getMalwareDetections() {
+  const result = await authenticatedRequest<ApiSuccess<MalwareDetection[]>>('/malware/detections')
+  return result.data
+}
+
+export async function getMalwareQuarantine() {
+  const result = await authenticatedRequest<ApiSuccess<MalwareQuarantineItem[]>>('/malware/quarantine')
+  return result.data
+}
+
+export type ADDomainStatus = {
+  domain_controllers: {
+    id: string
+    name: string
+    site: string
+    online: boolean
+    replication_healthy: boolean
+    last_replication?: string
+  }[]
+  failed_logons_24h: number
+  successful_logons_24h: number
+  privileged_group_changes: {
+    id: string
+    timestamp: string
+    account: string
+    group_name: string
+    action: string
+    source?: string
+  }[]
+  kerberos_anomalies: {
+    type: string
+    account: string
+    timestamp: string
+    severity: string
+  }[]
+  stale_accounts: number
+  stale_account_records: {
+    id: string
+    account_name: string
+    display_name?: string
+    account_type: string
+    organizational_unit: string
+    enabled: boolean
+    last_logon?: string
+    password_last_set?: string
+    password_never_expires: boolean
+    distinguished_name: string
+    source_domain_controller: string
+    stale: boolean
+  }[]
+  kerberos_events: {
+    id: string
+    event_id: number
+    activity: string
+    account: string
+    service_principal_name?: string
+    client_host: string
+    client_ip: string
+    source_domain_controller: string
+    timestamp: string
+    severity: string
+    detection_reason?: string
+  }[]
+}
+
+export type AuthActivity = {
+  id: string
+  date: string
+  successful: number
+  failed: number
+  anomaly: boolean
+}
+
+export async function getADDomainStatus() {
+  const result = await authenticatedRequest<ApiSuccess<ADDomainStatus>>('/ad/status')
+  return result.data
+}
+
+export async function getAuthActivity() {
+  const result = await authenticatedRequest<ApiSuccess<AuthActivity[]>>('/ad/auth-activity')
+  return result.data
+}
+
+export type MissingPatch = {
+  id: string
+  kb_id: string
+  title: string
+  severity: string
+  affected_devices: number
+  days_available: number
+  cve_reference?: string
+}
+
+export type PatchStats = {
+  total: number
+  patch_compliance: number
+  pending_reboot: number
+  eol_devices: number
+  critical_patches: number
+  missing_critical: number
+}
+
+export async function getMissingPatches() {
+  const result = await authenticatedRequest<ApiSuccess<MissingPatch[]>>('/patches/missing')
+  return result.data
+}
+
+export async function getPatchStats() {
+  const result = await authenticatedRequest<ApiSuccess<PatchStats>>('/patches/stats')
   return result.data
 }
 

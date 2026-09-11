@@ -1,9 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, ArrowDownRight, Users, Clock, Eye, X } from 'lucide-react'
-import { adDomainStatus, authActivityTrend } from '@/lib/mock-data'
+import { adDomainStatus as mockADStatus, authActivityTrend as mockAuthActivity } from '@/lib/mock-data'
 import type { ADAccountRecord, KerberosEventRecord } from '@/lib/types'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
@@ -11,6 +11,8 @@ import { KpiCard } from '@/components/ui/kpi-card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { cn } from '@/lib/utils'
 import { STATUS_COLORS } from '@/lib/theme'
+import { useDataMode } from '@/lib/data-mode-provider'
+import { getADDomainStatus, getAuthActivity, type ADDomainStatus, type AuthActivity } from '@/lib/api-client'
 
 const ANOMALY_LABELS = {
   kerberoasting: 'Kerberoasting',
@@ -62,16 +64,123 @@ function DetailField({ label, value, mono = false }: { label: string; value: str
 }
 
 export function ActiveDirectoryPage() {
-  const { domainControllers, failedLogons24h, successfulLogons24h, privilegedGroupChanges, kerberosAnomalies, staleAccounts } = adDomainStatus
+  const { mode } = useDataMode()
+  const [adStatus, setAdStatus] = useState<ADDomainStatus | null>(null)
+  const [authActivity, setAuthActivity] = useState<AuthActivity[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (mode === 'demo') {
+      setAdStatus(null)
+      setAuthActivity([])
+      setLoadError(null)
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
+    Promise.all([getADDomainStatus(), getAuthActivity()])
+      .then(([status, activity]) => {
+        if (cancelled) return
+        setAdStatus(status)
+        setAuthActivity(Array.isArray(activity) ? activity : [])
+      })
+      .catch(error => {
+        if (cancelled) return
+        setLoadError(error instanceof Error ? error.message : 'Unable to load Active Directory data')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  const domainControllers = useMemo(() => mode === 'demo' ? mockADStatus.domain_controllers : adStatus?.domain_controllers ?? [], [mode, adStatus])
+  const failedLogons24h = mode === 'demo' ? mockADStatus.failed_logons_24h : adStatus?.failed_logons_24h ?? 0
+  const successfulLogons24h = mode === 'demo' ? mockADStatus.successful_logons_24h : adStatus?.successful_logons_24h ?? 0
+  const privilegedGroupChanges = useMemo(() => mode === 'demo' ? mockADStatus.privileged_group_changes : adStatus?.privileged_group_changes ?? [], [mode, adStatus])
+  const kerberosAnomalies = useMemo(() => mode === 'demo' ? mockADStatus.kerberos_anomalies : adStatus?.kerberos_anomalies ?? [], [mode, adStatus])
+  const staleAccounts = mode === 'demo' ? mockADStatus.stale_accounts : adStatus?.stale_accounts ?? 0
+  const staleAccountRecords = useMemo(() => mode === 'demo' ? mockADStatus.stale_account_records : adStatus?.stale_account_records ?? [], [mode, adStatus])
+  const kerberosEvents = useMemo(() => mode === 'demo' ? mockADStatus.kerberos_events : adStatus?.kerberos_events ?? [], [mode, adStatus])
+
   const [selectedStaleAccount, setSelectedStaleAccount] = useState<ADAccountRecord | null>(null)
   const [selectedKerberosEvent, setSelectedKerberosEvent] = useState<KerberosEventRecord | null>(null)
-  const allDcsHealthy = domainControllers.every(dc => dc.online && dc.replicationHealthy)
-  const failRate = Math.round((failedLogons24h / (failedLogons24h + successfulLogons24h)) * 100 * 10) / 10
+  const allDcsHealthy = domainControllers.length ? domainControllers.every(dc => dc.online && dc.replication_healthy) : true
+  const failRate = Math.round(((failedLogons24h || 0) / ((failedLogons24h || 0) + (successfulLogons24h || 0))) * 1000) / 10 || 0
 
-  const trendData = authActivityTrend.map(d => ({
-    ...d,
-    label: d.date.slice(5), // MM-DD
-  }))
+  const mappedKerberosEvents = useMemo(() => {
+    return kerberosEvents.map(event => ({
+      id: event.id,
+      eventId: event.event_id as KerberosEventRecord['eventId'],
+      activity: event.activity as KerberosEventRecord['activity'],
+      account: event.account,
+      servicePrincipalName: event.service_principal_name,
+      clientHost: event.client_host,
+      clientIp: event.client_ip,
+      sourceDomainController: event.source_domain_controller,
+      timestamp: event.timestamp,
+      severity: event.severity as KerberosEventRecord['severity'],
+      detectionReason: event.detection_reason,
+    }))
+  }, [kerberosEvents])
+
+  const mappedStaleAccounts = useMemo(() => {
+    return staleAccountRecords.map(account => ({
+      id: account.id,
+      accountName: account.account_name,
+      displayName: account.display_name,
+      accountType: account.account_type as ADAccountRecord['accountType'],
+      organizationalUnit: account.organizational_unit,
+      enabled: account.enabled,
+      lastLogon: account.last_logon ?? new Date().toISOString(),
+      passwordLastSet: account.password_last_set,
+      passwordNeverExpires: account.password_never_expires,
+      distinguishedName: account.distinguished_name,
+      sourceDomainController: account.source_domain_controller,
+      stale: account.stale,
+    }))
+  }, [staleAccountRecords])
+
+  const trendData = useMemo(() => {
+    if (mode === 'demo') {
+      return mockAuthActivity.map(d => ({
+        ...d,
+        label: d.date.slice(5),
+      }))
+    }
+    return authActivity.map(d => ({
+      ...d,
+      label: d.date.slice(5),
+    }))
+  }, [mode, authActivity])
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Active Directory" description="Domain controller health, authentication activity, and privileged access monitoring." />
+        <div className="flex items-center justify-center py-10 text-[13px] text-muted-foreground">Loading Active Directory data...</div>
+      </div>
+    )
+  }
+
+  if (loadError) {
+    return (
+      <div className="space-y-4">
+        <PageHeader title="Active Directory" description="Domain controller health, authentication activity, and privileged access monitoring." />
+        <div className="flex flex-col items-center justify-center gap-2 py-10 text-[13px] text-status-critical">
+          <p>{loadError}</p>
+          <button type="button" onClick={() => mode !== 'demo' && window.location.reload()} className="rounded-md border border-border px-3 py-1.5 text-[12px] transition-colors hover:bg-surface-hover">Retry</button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-4">
@@ -150,12 +259,12 @@ export function ActiveDirectoryPage() {
                     </span>
                   </td>
                   <td className="px-3 py-2.5">
-                    <span className={cn('font-medium', dc.replicationHealthy ? 'text-[#2563EB]' : 'text-[#F79009]')}>
-                      {dc.replicationHealthy ? 'Replication OK' : 'Replication Issue'}
+                    <span className={cn('font-medium', dc.replication_healthy ? 'text-[#2563EB]' : 'text-[#F79009]')}>
+                      {dc.replication_healthy ? 'Replication OK' : 'Replication Issue'}
                     </span>
                   </td>
                   <td className="whitespace-nowrap px-3 py-2.5 text-black dark:text-white">
-                    {formatDistanceToNow(new Date(dc.lastReplication), { addSuffix: true })}
+                    {dc.last_replication ? formatDistanceToNow(new Date(dc.last_replication), { addSuffix: true }) : '—'}
                   </td>
                 </tr>
               ))}
@@ -204,7 +313,7 @@ export function ActiveDirectoryPage() {
           ) : (
             <div className="space-y-2">
               {kerberosAnomalies.map((a, i) => (
-                <button type="button" key={i} onClick={() => setSelectedKerberosEvent(adDomainStatus.kerberosEvents[i])} className="block w-full bg-surface border border-border rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-hover">
+                <button type="button" key={i} onClick={() => setSelectedKerberosEvent(mappedKerberosEvents[i])} className="block w-full bg-surface border border-border rounded-md px-3 py-2.5 text-left transition-colors hover:bg-surface-hover">
                   <div className="flex items-start justify-between gap-2">
                     <div>
                       <span
@@ -221,7 +330,7 @@ export function ActiveDirectoryPage() {
                     </span>
                   </div>
                   <p className="text-[12px] text-foreground font-semibold mt-1.5">
-                    {ANOMALY_LABELS[a.type] ?? a.type}
+                    {ANOMALY_LABELS[a.type as keyof typeof ANOMALY_LABELS] ?? a.type}
                   </p>
                   <p className="font-mono text-[12px] font-medium text-muted-foreground mt-0.5">{a.account}</p>
                   <span className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-black dark:text-white"><Eye size={12} /> View event details</span>
@@ -253,7 +362,7 @@ export function ActiveDirectoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {adDomainStatus.staleAccountRecords.map(account => (
+              {mappedStaleAccounts.map(account => (
                 <tr key={account.id} className="transition-colors hover:bg-surface-hover">
                   <td className="px-3 py-2.5 font-mono font-semibold text-black dark:text-white">{account.accountName}</td>
                   <td className="px-3 py-2.5 capitalize text-black dark:text-white">{account.accountType}</td>
@@ -289,7 +398,7 @@ export function ActiveDirectoryPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {adDomainStatus.kerberosEvents.map(event => (
+              {mappedKerberosEvents.map(event => (
                 <tr key={event.id} className="transition-colors hover:bg-surface-hover">
                   <td className="whitespace-nowrap px-3 py-2.5 text-black dark:text-white">{formatDistanceToNow(new Date(event.timestamp), { addSuffix: true })}</td>
                   <td className="px-3 py-2.5 font-mono font-semibold text-black dark:text-white">{event.eventId}</td>
@@ -329,7 +438,7 @@ export function ActiveDirectoryPage() {
                     {formatDistanceToNow(new Date(change.timestamp), { addSuffix: true })}
                   </td>
                   <td className="px-3 py-2.5 font-mono font-semibold text-black dark:text-white">{change.account}</td>
-                  <td className="px-3 py-2.5 text-black dark:text-white">{change.group}</td>
+                  <td className="px-3 py-2.5 text-black dark:text-white">{change.group_name}</td>
                   <td className="px-3 py-2.5">
                     <div className="flex items-center gap-1.5">
                 {change.action === 'added'
