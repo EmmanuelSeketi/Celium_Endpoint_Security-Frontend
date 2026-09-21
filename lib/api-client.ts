@@ -302,3 +302,137 @@ export async function getPatchStats() {
   return result.data
 }
 
+export type ApiKey = {
+  id: string
+  name: string
+  key_prefix: string
+  has_key: boolean
+  expires_at?: string
+  is_active: boolean
+  last_used?: string
+  created_at: string
+}
+
+export type EnrollmentToken = {
+  id: string
+  token: string
+  description?: string
+  expires_at?: string
+  is_active: boolean
+  created_at: string
+}
+
+export type AgentEnrollmentRequest = {
+  token: string
+}
+
+export type AgentEnrollmentResponse = {
+  device_id: string
+  agent_token: string
+}
+
+export type AgentTelemetryRequest = {
+  hostname: string
+  os: string
+  os_version: string
+  ip_address: string
+  mac_address: string
+  malware: {
+    engine_version: string
+    security_intelligence_version: string
+    security_intelligence_updated_at?: string
+    definition_age: number
+    realtime_protection: boolean
+    last_scan_result: string
+    last_scan_at?: string
+    last_scan_type?: string
+    last_scan_duration_seconds: number
+    last_scan_files: number
+    tamper_protection: boolean
+    quarantine_count: number
+  }
+  patch_status: {
+    missing_critical: number
+    missing_total: number
+    pending_reboot: boolean
+    last_update_check?: string
+    os_eol: boolean
+    eol_date?: string
+  }
+  detections: Array<{
+    threat_name: string
+    file_path: string
+    action: string
+    hash: string
+    severity: string
+  }>
+  quarantine: Array<{
+    file_name: string
+    original_path: string
+    threat_name: string
+  }>
+}
+
+export async function getApiKeys() {
+  const result = await authenticatedRequest<ApiSuccess<ApiKey[]>>('/api-keys')
+  return result.data
+}
+
+export async function createApiKey(input: { name: string; expires_in?: string }) {
+  const result = await authenticatedRequest<ApiSuccess<ApiKey>>('/api-keys', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return result.data
+}
+
+export async function updateApiKey(id: string, input: { is_active?: boolean }) {
+  await authenticatedRequest(`/api-keys/${encodeURIComponent(id)}`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  })
+}
+
+export async function deleteApiKey(id: string) {
+  await authenticatedRequest(`/api-keys/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function getEnrollmentTokens() {
+  const result = await authenticatedRequest<ApiSuccess<EnrollmentToken[]>>('/enrollment-tokens')
+  return result.data
+}
+
+export async function createEnrollmentToken(input: { description?: string; expires_in?: string }) {
+  const result = await authenticatedRequest<ApiSuccess<EnrollmentToken>>('/enrollment-tokens', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return result.data
+}
+
+export async function deleteEnrollmentToken(id: string) {
+  await authenticatedRequest(`/enrollment-tokens/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+}
+
+export async function enrollAgent(input: AgentEnrollmentRequest) {
+  const result = await authenticatedRequest<ApiSuccess<AgentEnrollmentResponse>>('/agent/enroll', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return result.data
+}
+
+export async function sendTelemetry(payload: AgentTelemetryRequest, agentToken: string) {
+  await request('/agent/telemetry', {
+    method: 'POST',
+    headers: {
+      'X-Agent-Token': agentToken,
+    },
+    body: JSON.stringify(payload),
+  })
+}
+

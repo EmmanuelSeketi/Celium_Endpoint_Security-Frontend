@@ -1,12 +1,13 @@
 'use client'
 
 import { FormEvent, useState } from 'react'
-import { Settings, Bell, Shield, Key, Save, Eye, EyeOff, UserCircle, LogOut } from 'lucide-react'
+import { Settings, Bell, Shield, Key, Save, Eye, EyeOff, UserCircle, LogOut, Plus, Trash2 } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-provider'
+import { getApiKeys, createApiKey, deleteApiKey as deleteApiKeyApi, getEnrollmentTokens, createEnrollmentToken, deleteEnrollmentToken as deleteEnrollmentTokenApi, type ApiKey, type EnrollmentToken } from '@/lib/api-client'
 
 type Section = 'account' | 'general' | 'notifications' | 'security' | 'api'
 
@@ -84,6 +85,14 @@ function TextField({
 export function SettingsPage() {
   const [section, setSection] = useState<Section>('account')
   const [saved, setSaved] = useState(false)
+  const [apiKeys, setApiKeys] = useState<ApiKey[]>([])
+  const [enrollmentTokens, setEnrollmentTokens] = useState<EnrollmentToken[]>([])
+  const [loadingKeys, setLoadingKeys] = useState(false)
+  const [loadingTokens, setLoadingTokens] = useState(false)
+  const [newKeyName, setNewKeyName] = useState('')
+  const [newTokenDescription, setNewTokenDescription] = useState('')
+  const [keyError, setKeyError] = useState<string | null>(null)
+  const [tokenError, setTokenError] = useState<string | null>(null)
 
   // General
   const [orgName, setOrgName] = useState('Acme Corp')
@@ -104,13 +113,76 @@ export function SettingsPage() {
   const [maxCriticalPatches, setMaxCriticalPatches] = useState('0')
   const [domainRequired, setDomainRequired] = useState(false)
 
-  // API
-  const [showToken, setShowToken] = useState(false)
-  const apiToken = 'sk_live_ac_7f3e2b1d4a9c8e5f2b3d1a4c'
+  const { admin } = useAuth()
+
+  useEffect(() => {
+    if (section !== 'api') return
+    setLoadingKeys(true)
+    setLoadingTokens(true)
+    setKeyError(null)
+    setTokenError(null)
+    Promise.all([getApiKeys(), getEnrollmentTokens()])
+      .then(([keys, tokens]) => {
+        setApiKeys(Array.isArray(keys) ? keys : [])
+        setEnrollmentTokens(Array.isArray(tokens) ? tokens : [])
+      })
+      .catch(error => {
+        setKeyError(error instanceof Error ? error.message : 'Unable to load API keys')
+        setTokenError(error instanceof Error ? error.message : 'Unable to load enrollment tokens')
+      })
+      .finally(() => {
+        setLoadingKeys(false)
+        setLoadingTokens(false)
+      })
+  }, [section])
 
   function handleSave() {
     setSaved(true)
     setTimeout(() => setSaved(false), 2200)
+  }
+
+  async function handleCreateApiKey() {
+    if (!newKeyName.trim()) return
+    setKeyError(null)
+    try {
+      const created = await createApiKey({ name: newKeyName.trim() })
+      setApiKeys(prev => [created, ...prev])
+      setNewKeyName('')
+    } catch (error) {
+      setKeyError(error instanceof Error ? error.message : 'Unable to create API key')
+    }
+  }
+
+  async function handleCreateEnrollmentToken() {
+    if (!newTokenDescription.trim()) return
+    setTokenError(null)
+    try {
+      const created = await createEnrollmentToken({ description: newTokenDescription.trim() })
+      setEnrollmentTokens(prev => [created, ...prev])
+      setNewTokenDescription('')
+    } catch (error) {
+      setTokenError(error instanceof Error ? error.message : 'Unable to create enrollment token')
+    }
+  }
+
+  async function handleDeleteApiKey(id: string) {
+    setKeyError(null)
+    try {
+      await deleteApiKeyApi(id)
+      setApiKeys(prev => prev.filter(key => key.id !== id))
+    } catch (error) {
+      setKeyError(error instanceof Error ? error.message : 'Unable to delete API key')
+    }
+  }
+
+  async function handleDeleteEnrollmentToken(id: string) {
+    setTokenError(null)
+    try {
+      await deleteEnrollmentTokenApi(id)
+      setEnrollmentTokens(prev => prev.filter(token => token.id !== id))
+    } catch (error) {
+      setTokenError(error instanceof Error ? error.message : 'Unable to delete enrollment token')
+    }
   }
 
   return (
@@ -212,28 +284,108 @@ export function SettingsPage() {
 
           {section === 'api' && (
             <SectionCard title="API & Integration Tokens">
-              <SettingRow label="Platform API Token" description="Use this token to authenticate agent check-ins and the REST API.">
-                <div className="flex items-center gap-2">
-                  <code className="font-mono text-[12px] bg-surface border border-border rounded px-2 py-1.5 text-muted-foreground w-52 overflow-hidden">
-                    {showToken ? apiToken : '•'.repeat(32)}
-                  </code>
-                  <button
-                    onClick={() => setShowToken(!showToken)}
-                    className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label={showToken ? 'Hide token' : 'Show token'}
-                  >
-                    {showToken ? <EyeOff size={13} strokeWidth={1.5} /> : <Eye size={13} strokeWidth={1.5} />}
-                  </button>
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-[13px] font-semibold text-foreground mb-2">API Keys</h3>
+                  <p className="text-[12px] text-muted-foreground mb-3">
+                    Use these keys to authenticate platform integrations and external tools.
+                  </p>
+                  {keyError && <p className="text-[12px] text-status-critical mb-2">{keyError}</p>}
+                  <div className="space-y-2 mb-3">
+                    {loadingKeys && <p className="text-[12px] text-muted-foreground">Loading API keys...</p>}
+                    {!loadingKeys && apiKeys.length === 0 && (
+                      <p className="text-[12px] text-muted-foreground">No API keys yet.</p>
+                    )}
+                    {apiKeys.map(key => (
+                      <div key={key.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-medium text-foreground truncate">{key.name}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {key.key_prefix}•••••••• •••••
+                            {key.expires_at ? ` • Expires ${new Date(key.expires_at).toLocaleDateString()}` : ' • No expiry'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteApiKey(key.id)}
+                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground hover:text-status-critical transition-colors"
+                          aria-label="Delete API key"
+                        >
+                          <Trash2 size={13} strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newKeyName}
+                      onChange={e => setNewKeyName(e.target.value)}
+                      placeholder="New API key name"
+                      className="h-8 flex-1 bg-surface border border-border rounded-md px-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateApiKey}
+                      disabled={!newKeyName.trim()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-md text-[12px] font-medium hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Plus size={13} strokeWidth={1.5} />
+                      Create
+                    </button>
+                  </div>
                 </div>
-              </SettingRow>
-              <div className="pt-2">
-                <p className="text-[12px] text-muted-foreground leading-relaxed">
-                  API tokens grant full access to your fleet&apos;s compliance data. Treat them like passwords — rotate regularly and never commit to source control.
-                </p>
-                <button className="mt-3 flex items-center gap-2 px-3 py-1.5 bg-surface border border-border rounded-md text-[13px] text-muted-foreground hover:text-foreground hover:border-brand/50 transition-colors">
-                  <Key size={13} strokeWidth={1.5} />
-                  Rotate Token
-                </button>
+
+                <div>
+                  <h3 className="text-[13px] font-semibold text-foreground mb-2">Enrollment Tokens</h3>
+                  <p className="text-[12px] text-muted-foreground mb-3">
+                    One-time tokens used by endpoints to enroll into this fleet.
+                  </p>
+                  {tokenError && <p className="text-[12px] text-status-critical mb-2">{tokenError}</p>}
+                  <div className="space-y-2 mb-3">
+                    {loadingTokens && <p className="text-[12px] text-muted-foreground">Loading enrollment tokens...</p>}
+                    {!loadingTokens && enrollmentTokens.length === 0 && (
+                      <p className="text-[12px] text-muted-foreground">No enrollment tokens yet.</p>
+                    )}
+                    {enrollmentTokens.map(token => (
+                      <div key={token.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-mono text-foreground truncate">{token.token}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {token.description || 'No description'}
+                            {token.expires_at ? ` • Expires ${new Date(token.expires_at).toLocaleDateString()}` : ' • No expiry'}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteEnrollmentToken(token.id)}
+                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground hover:text-status-critical transition-colors"
+                          aria-label="Delete enrollment token"
+                        >
+                          <Trash2 size={13} strokeWidth={1.5} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newTokenDescription}
+                      onChange={e => setNewTokenDescription(e.target.value)}
+                      placeholder="New enrollment token description"
+                      className="h-8 flex-1 bg-surface border border-border rounded-md px-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleCreateEnrollmentToken}
+                      disabled={!newTokenDescription.trim()}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-md text-[12px] font-medium hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <Plus size={13} strokeWidth={1.5} />
+                      Create
+                    </button>
+                  </div>
+                </div>
               </div>
             </SectionCard>
           )}
