@@ -316,6 +316,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
   const [protectionHistory, setProtectionHistory] = useState<DeviceProtectionHistory[]>([])
   const [protectionHistoryLoading, setProtectionHistoryLoading] = useState(false)
   const [protectionHistoryOpen, setProtectionHistoryOpen] = useState(false)
+  const [expandedProtectionId, setExpandedProtectionId] = useState<string | null>(null)
 
   useEffect(() => {
     setChecksLoading(true)
@@ -701,7 +702,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                     title: 'Ransomware protection',
                     description: 'Controls that protect files and folders from unauthorized changes.',
                     icon: Lock,
-                    labels: ['Controlled folder access', 'Ransomware protection', 'Protection History'],
+                    labels: ['Controlled folder access', 'Ransomware protection'],
                   },
                 ]
 
@@ -783,9 +784,9 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                             </div>
                           )
                         })}
-                        <button type="button" onClick={openProtectionHistory} className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-3 text-left transition-colors hover:bg-surface-hover">
-                          <span className="text-[12px] font-medium text-foreground">Open Protection History</span>
-                          <ChevronRight size={14} strokeWidth={1.75} className="text-muted-foreground" />
+                        <button type="button" onClick={openProtectionHistory} className="flex w-full items-center justify-between rounded-md border border-border bg-surface px-3 py-2.5 text-left transition-colors hover:bg-surface-hover">
+                          <span className="text-[12px] text-black dark:text-white">Protection History</span>
+                          <span className="inline-flex items-center gap-1.5 text-[12px] text-black dark:text-white"><span className="font-mono">{device.malwareStatus.quarantineCount}</span><ChevronRight size={14} strokeWidth={1.75} className="text-muted-foreground" /></span>
                         </button>
                       </>
                     ) : (
@@ -835,7 +836,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
           <div className="absolute inset-0 z-40 flex items-center justify-center bg-black/40 p-5">
             <div className="max-h-full w-full overflow-hidden rounded-md border border-border bg-card shadow-xl">
               <div className="flex items-center justify-between border-b border-border px-4 py-3"><p className="text-[13px] font-semibold text-foreground">Protection History</p><button type="button" onClick={() => setProtectionHistoryOpen(false)} aria-label="Close protection history"><X size={14} /></button></div>
-              {protectionHistoryLoading ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">Loading protection history...</p> : <div className="max-h-[520px] divide-y divide-border overflow-y-auto">{protectionHistory.map(item => <div key={item.id} className="space-y-1 px-4 py-3"><div className="flex items-center justify-between gap-3"><p className="text-[12px] font-semibold text-foreground">{item.threat_name}</p><span className="text-[11px] capitalize text-muted-foreground">{item.action}</span></div><p className="truncate text-[11px] text-muted-foreground" title={item.file_path}>{item.file_path || 'Affected item not reported'}</p><p className="text-[11px] text-muted-foreground">{item.severity} · {format(new Date(item.detected_at), 'MMM d, yyyy HH:mm')}</p></div>)}</div>}
+              {protectionHistoryLoading ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">Loading protection history...</p> : <div className="max-h-[520px] divide-y divide-border overflow-y-auto">{protectionHistory.length === 0 ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">No protection history reported for this endpoint.</p> : protectionHistory.map(item => {
+                const expanded = expandedProtectionId === item.id
+                return <div key={item.id} className="px-4 py-1"><button type="button" onClick={() => setExpandedProtectionId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left"><span className="min-w-0 truncate text-[12px] font-semibold text-foreground">{item.threat_name}</span><span className="inline-flex shrink-0 items-center gap-2 text-[11px] capitalize text-muted-foreground"><span>{item.action}</span><ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} /></span></button>{expanded && <div className="space-y-2 border-t border-border pb-3 pt-2"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Affected item</p><p className="break-all text-[11px] text-foreground">{item.file_path || 'Not reported'}</p></div><div className="grid grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</p><p className="text-[11px] capitalize text-foreground">{item.action}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Severity</p><p className="text-[11px] capitalize text-foreground">{item.severity}</p></div></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Detected</p><p className="text-[11px] text-foreground">{format(new Date(item.detected_at), 'MMM d, yyyy HH:mm')}</p></div></div>}</div>
+              })}</div>}
             </div>
           </div>
         ) : null}
