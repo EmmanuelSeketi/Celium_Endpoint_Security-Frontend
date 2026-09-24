@@ -14,7 +14,7 @@ const DataModeContext = createContext<DataModeContextValue | null>(null)
 const MODE_KEY = 'fleet-data-mode'
 
 export function DataModeProvider({ children }: { children: React.ReactNode }) {
-  const [mode, setModeState] = useState<DataMode>('demo')
+  const [mode, setModeState] = useState<DataMode>('api')
 
   useEffect(() => {
     const storedMode = localStorage.getItem(MODE_KEY)

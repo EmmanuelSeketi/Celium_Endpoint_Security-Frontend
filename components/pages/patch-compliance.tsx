@@ -118,6 +118,7 @@ export function PatchCompliancePage() {
       assetType: 'laptop',
       os: device.os === 'windows' ? 'Windows' : device.os === 'macos' ? 'Mac' : 'Linux',
       osVersion: device.os_version,
+      osCaption: device.os_caption,
       department: '',
       ip: device.ip_address,
       mac: '',
@@ -129,16 +130,9 @@ export function PatchCompliancePage() {
       lastSeen: device.last_checkin ?? '',
       lastScanned: '',
       malwareStatus: {
-        engineVersion: device.malware?.engine_version ?? '',
-        securityIntelligenceVersion: device.malware?.security_intelligence_version,
-        securityIntelligenceUpdatedAt: device.malware?.security_intelligence_updated_at,
         definitionAge: device.malware?.definition_age ?? 0,
         realtimeProtection: device.malware?.realtime_protection ?? false,
-        lastScanResult: (device.malware?.last_scan_result ?? 'clean') as Device['malwareStatus']['lastScanResult'],
-        lastScanAt: device.malware?.last_scan_at,
-        lastScanType: device.malware?.last_scan_type as Device['malwareStatus']['lastScanType'],
-        lastScanDurationSeconds: device.malware?.last_scan_duration_seconds,
-        lastScanFiles: device.malware?.last_scan_files,
+        lastScanResult: device.malware?.last_scan_result ?? 'scan_failed',
         tamperProtection: device.malware?.tamper_protection ?? false,
         quarantineCount: device.malware?.quarantine_count ?? 0,
       },
@@ -387,7 +381,7 @@ export function PatchCompliancePage() {
                   <AlertTriangle size={15} strokeWidth={1.5} className="text-[#F04438] shrink-0" />
                   <div>
                     <p className="font-mono text-[13px] font-medium text-foreground">{d.name}</p>
-                    <p className="text-[11px] text-muted-foreground">{d.osVersion}</p>
+                     <p className="text-[11px] text-muted-foreground">{d.osCaption ? `${d.osCaption} · ${d.osVersion}` : d.osVersion}</p>
                   </div>
                 </div>
                 <div className="text-right">
@@ -450,7 +444,7 @@ export function PatchCompliancePage() {
                   <div className="col-span-3">
                     <span className="truncate font-mono text-[12px] text-black dark:text-white">{d.name}</span>
                   </div>
-                  <span className="col-span-2 truncate text-[12px] text-black dark:text-white">{d.osVersion.split(' (')[0]}</span>
+                  <span className="col-span-2 truncate text-[12px] text-black dark:text-white">{d.osCaption ? `${d.osCaption} · ` : ''}{d.osVersion.split(' (')[0]}</span>
                   <span className={cn('col-span-2 text-center font-mono font-semibold', d.patchStatus.missingCritical > 0 ? 'text-[#F04438]' : 'text-[#16A34A]')}>
                     {d.patchStatus.missingCritical}
                   </span>

@@ -101,6 +101,7 @@ export function OverviewPage() {
     complianceScore: device.complianceScore,
     os: device.os === 'Mac' ? 'macos' : device.os.toLowerCase() as ManagedDevice['os'],
     os_version: device.osVersion,
+    os_caption: device.osCaption,
     ip_address: device.ip,
     status: device.status === 'compliant' ? 'active' : device.status === 'critical' ? 'error' : 'inactive' as ManagedDevice['status'],
     last_checkin: device.lastSeen,
@@ -114,6 +115,7 @@ export function OverviewPage() {
     status: 'active' as const,
     alert_type: 'compliance_failure',
     created_at: alert.timestamp,
+    device_name: alert.deviceName,
   })) : liveAlerts
   const displayChecks = overviewDemoMode ? demoChecks.map(check => ({
     id: check.id,
@@ -121,6 +123,7 @@ export function OverviewPage() {
     category: check.category,
     title: check.name,
     description: check.description,
+    failing_device_count: check.failingDeviceCount,
     is_active: true,
   })) : liveChecks
   const totalDevices = displaySummary.total_devices
@@ -128,20 +131,33 @@ export function OverviewPage() {
   const devicesNeedingAttention = displaySummary.non_compliant
   const errors = displaySummary.error_count
   const stats = overviewDemoMode ? demoStats : {
-    avgScore: 0,
+    avgScore: liveDevices.length ? Math.round(liveDevices.reduce((sum, device) => sum + (device.compliance_score ?? 0), 0) / liveDevices.length) : 0,
     compliant: displaySummary.compliant_count,
     warning: displaySummary.non_compliant,
     critical: displaySummary.error_count,
     needingAttention: displaySummary.non_compliant,
-    byOS: { Windows: { avg: 0 }, Mac: { avg: 0 }, Linux: { avg: 0 } },
-    rtpCoverage: 0,
-    defCompliance: 0,
-    activeDetections: 0,
-    patchCompliance: 0,
-    missingCriticalTotal: 0,
-    pendingReboot: 0,
+    byOS: {
+      Windows: { avg: 0 },
+      Mac: { avg: 0 },
+      Linux: { avg: 0 },
+    },
+    rtpCoverage: liveDevices.length ? Math.round((liveDevices.filter(device => device.malware?.realtime_protection).length / liveDevices.length) * 100) : 0,
+    defCompliance: liveDevices.length ? Math.round((liveDevices.filter(device => (device.malware?.definition_age ?? 999) <= 3).length / liveDevices.length) * 100) : 0,
+    activeDetections: liveDevices.filter(device => device.malware?.last_scan_result === 'threats_found').length,
+    patchCompliance: liveDevices.length ? Math.round((liveDevices.filter(device => (device.patch_status?.missing_total ?? 0) === 0 && !device.patch_status?.pending_reboot).length / liveDevices.length) * 100) : 0,
+    missingCriticalTotal: liveDevices.reduce((sum, device) => sum + (device.patch_status?.missing_critical ?? 0), 0),
+    pendingReboot: liveDevices.filter(device => device.patch_status?.pending_reboot).length,
   }
-  const averageFleetHealth = overviewDemoMode ? stats.avgScore : 0
+  if (!overviewDemoMode) {
+    for (const os of ['windows', 'macos', 'linux'] as const) {
+      const osDevices = liveDevices.filter(device => device.os === os)
+      const average = osDevices.length ? Math.round(osDevices.reduce((sum, device) => sum + (device.compliance_score ?? 0), 0) / osDevices.length) : 0
+      if (os === 'windows') stats.byOS.Windows.avg = average
+      if (os === 'macos') stats.byOS.Mac.avg = average
+      if (os === 'linux') stats.byOS.Linux.avg = average
+    }
+  }
+  const averageFleetHealth = stats.avgScore
   const healthLabel = averageFleetHealth >= 80 ? 'Healthy' : averageFleetHealth >= 60 ? 'Warning' : averageFleetHealth > 0 ? 'Critical' : 'No compliance data'
   const healthColor = healthLabel === 'Healthy'
     ? 'var(--category-1)'
@@ -152,19 +168,41 @@ export function OverviewPage() {
         : 'var(--muted-foreground)'
 
   const osByScore = [
-    { os: 'Windows', score: overviewDemoMode ? stats.byOS.Windows.avg : 0 },
-    { os: 'macOS', score: overviewDemoMode ? stats.byOS.Mac.avg : 0 },
-    { os: 'Linux', score: overviewDemoMode ? stats.byOS.Linux.avg : 0 },
+    { os: 'Windows', score: stats.byOS.Windows.avg },
+    { os: 'macOS', score: stats.byOS.Mac.avg },
+    { os: 'Linux', score: stats.byOS.Linux.avg },
   ]
 
   const topFailingChecks = overviewDemoMode
     ? demoChecks.slice(0, 5).map(check => ({ name: check.name, value: check.failingDeviceCount }))
-    : displayChecks.slice(0, 5).map(check => ({ name: check.title, value: 0 }))
+    : [...displayChecks].sort((a, b) => b.failing_device_count - a.failing_device_count).slice(0, 5).map(check => ({ name: check.title, value: check.failing_device_count }))
 
-  // Risk heatmap: departments × category
-  const departments = ['Engineering', 'Finance', 'Sales', 'HR', 'IT', 'Marketing', 'Design']
   const categories = ['malware_protection', 'os_updates', 'active_directory', 'other'] as const
-  const heatmapData = departments.map(() => categories.map(() => 0))
+  const riskPlatforms = overviewDemoMode
+    ? [
+        { label: 'Windows', count: demoDevices.filter(device => device.os === 'Windows').length },
+        { label: 'macOS', count: demoDevices.filter(device => device.os === 'Mac').length },
+        { label: 'Linux', count: demoDevices.filter(device => device.os === 'Linux').length },
+      ]
+    : [
+        { label: 'Windows', count: liveDevices.filter(device => device.os === 'windows').length },
+        { label: 'macOS', count: liveDevices.filter(device => device.os === 'macos').length },
+        { label: 'Linux', count: liveDevices.filter(device => device.os === 'linux').length },
+      ]
+  const categoryFailures = overviewDemoMode
+    ? {
+        malware_protection: demoChecks.filter(check => check.category === 'malware_protection').reduce((sum, check) => sum + check.failingDeviceCount, 0),
+        os_updates: demoChecks.filter(check => check.category === 'os_updates').reduce((sum, check) => sum + check.failingDeviceCount, 0),
+        active_directory: demoChecks.filter(check => check.category === 'active_directory').reduce((sum, check) => sum + check.failingDeviceCount, 0),
+        other: demoChecks.filter(check => check.category === 'other').reduce((sum, check) => sum + check.failingDeviceCount, 0),
+      }
+    : categories.reduce((result, category) => {
+        const backendCategory = category === 'malware_protection' ? 'malware' : category === 'os_updates' ? 'patch' : category
+        result[category] = displayChecks.filter(check => check.category === backendCategory).reduce((sum, check) => sum + check.failing_device_count, 0)
+        return result
+      }, { malware_protection: 0, os_updates: 0, active_directory: 0, other: 0 })
+  const platformTotal = Math.max(riskPlatforms.reduce((sum, platform) => sum + platform.count, 0), 1)
+  const heatmapData = riskPlatforms.map(platform => categories.map(category => Math.round(categoryFailures[category] * (platform.count / platformTotal))))
 
   return (
     <div className="space-y-5">
@@ -271,9 +309,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Malware Protection</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Active detections</span><span className="text-black dark:text-white tabular-nums">0</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">{stats.rtpCoverage}%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Definitions up to date</span><span className="text-black dark:text-white tabular-nums">{stats.defCompliance}%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Active detections</span><span className="text-black dark:text-white tabular-nums">{stats.activeDetections}</span></div>
               </div>
             </div>
           </Link>
@@ -282,9 +320,9 @@ export function OverviewPage() {
             <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
               <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">OS Updates</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">0%</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">0</span></div>
-                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Pending reboot</span><span className="text-black dark:text-white tabular-nums">0</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">{stats.patchCompliance}%</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Missing critical (fleet)</span><span className="text-black dark:text-white tabular-nums">{stats.missingCriticalTotal}</span></div>
+                <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Pending reboot</span><span className="text-black dark:text-white tabular-nums">{stats.pendingReboot}</span></div>
               </div>
             </div>
           </Link>
@@ -320,13 +358,13 @@ export function OverviewPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayAlerts.slice(0, 4).map(alert => (
+                    {displayAlerts.slice(0, 5).map(alert => (
                       <tr key={alert.id} className="h-10 border-b border-border font-medium last:border-b-0 hover:bg-surface-hover transition-colors">
                         <td className="max-w-0 px-4 py-2">
                           <span className="block truncate text-foreground" title={alert.message}>{alert.message}</span>
                         </td>
                         <td className="max-w-0 px-2 py-2 text-black dark:text-white">
-                          <span className="block truncate font-mono">—</span>
+                          <span className="block truncate font-mono">{alert.device_name || '—'}</span>
                         </td>
                         <td className="px-4 py-2 text-right text-black dark:text-white whitespace-nowrap">
                           {formatDistanceToNow(new Date(alert.created_at), { addSuffix: true })}
@@ -393,7 +431,7 @@ export function OverviewPage() {
       <SectionCard title="Risk Heatmap" titleClassName="text-[13px] text-black dark:text-white">
         <RiskHeatmap
           categories={categories.map(category => getCategoryLabel(category))}
-          departments={departments}
+          departments={riskPlatforms.map(platform => platform.label)}
           values={heatmapData}
           height={340}
         />
@@ -451,7 +489,7 @@ export function OverviewPage() {
                     {d.assetType === 'dc_server' ? 'DC Server' : d.assetType === 'laptop' ? 'Laptop' : d.assetType === 'workstation' ? 'Workstation' : 'Unknown'}
                   </span>
                 </td>
-                <td className="px-3">
+                 <td className="px-3">
                   <div className="flex items-center gap-2">
                     <OSIcon os={d.os === 'macos' ? 'Mac' : d.os.charAt(0).toUpperCase() + d.os.slice(1)} />
                     <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>

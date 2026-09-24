@@ -5,12 +5,14 @@ export type Severity = 'info' | 'warning' | 'critical'
 export type CheckCategory = 'active_directory' | 'malware_protection' | 'os_updates' | 'other'
 
 export interface MalwareStatus {
-  engineVersion: string
+  engineVersion?: string
   securityIntelligenceVersion?: string
-  securityIntelligenceCreatedAt?: string
   securityIntelligenceUpdatedAt?: string
   definitionAge: number // days
   realtimeProtection: boolean
+  cloudDeliveredProtection?: boolean
+  automaticSampleSubmission?: boolean
+  devDriveProtection?: boolean
   lastScanResult: 'clean' | 'threats_found' | 'scan_failed'
   lastScanAt?: string
   lastScanType?: 'quick' | 'full' | 'custom'
@@ -18,6 +20,7 @@ export interface MalwareStatus {
   lastScanFiles?: number
   tamperProtection: boolean
   quarantineCount: number
+  protectionHistory?: Array<{ id: string; threatName: string; filePath: string; action: string; severity: string; detectedAt: string }>
 }
 
 export interface PatchStatus {
@@ -27,6 +30,9 @@ export interface PatchStatus {
   lastUpdateCheck: string // ISO datetime
   osEol: boolean
   eolDate?: string
+  updateHistory?: Record<string, unknown>[]
+  updatesAutomatic?: boolean
+  updatesPauseUntil?: string
 }
 
 export interface Device {
@@ -35,6 +41,7 @@ export interface Device {
   assetType: DeviceAssetType
   os: OS
   osVersion: string
+  osCaption?: string
   department: string
   ip: string
   mac: string

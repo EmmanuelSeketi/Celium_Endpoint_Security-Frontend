@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { X, ListChecks, ChevronRight, Info } from 'lucide-react'
 import { complianceChecks } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
@@ -9,6 +9,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import type { ComplianceCheck, Severity, CheckCategory } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { STATUS_COLORS } from '@/lib/theme'
+import { getSecurityChecks } from '@/lib/api-client'
 
 const SEVERITY_ORDER: Severity[] = ['critical', 'warning', 'info']
 const CATEGORY_LABELS: Record<CheckCategory, string> = {
@@ -18,6 +19,12 @@ const CATEGORY_LABELS: Record<CheckCategory, string> = {
   other: 'Other',
 }
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [CheckCategory, string][]
+const LIVE_CHECK_SEVERITY: Record<string, Severity> = {
+  'chk-001': 'critical', 'chk-002': 'warning', 'chk-004': 'warning', 'chk-007': 'warning',
+  'chk-008': 'critical', 'chk-010': 'critical', 'chk-011': 'critical', 'chk-012': 'warning',
+  'chk-014': 'critical', 'chk-015': 'critical', 'chk-016': 'warning', 'chk-017': 'warning',
+  'chk-020': 'critical', 'chk-021': 'warning',
+}
 
 interface CheckDetailProps {
   check: ComplianceCheck
@@ -83,8 +90,28 @@ export function ChecksPage() {
   const [categoryFilter, setCategoryFilter] = useState<CheckCategory | ''>('')
   const [severityFilter, setSeverityFilter] = useState<Severity | ''>('')
   const [selected, setSelected] = useState<ComplianceCheck | null>(null)
+  const [liveChecks, setLiveChecks] = useState<ComplianceCheck[] | null>(null)
 
-  const filtered = complianceChecks.filter(c => {
+  useEffect(() => {
+    getSecurityChecks()
+      .then(items => {
+        if (items.length === 0) return
+        setLiveChecks(items.map(item => ({
+          id: item.id,
+          name: item.title,
+          category: item.category === 'patch' ? 'os_updates' : item.category === 'malware' ? 'malware_protection' : item.category as CheckCategory,
+          severity: LIVE_CHECK_SEVERITY[item.check_id] ?? 'info',
+          failingDeviceCount: item.failing_device_count ?? 0,
+          description: item.description ?? '',
+          remediation: item.remediation ?? 'Review the endpoint policy and remediate the reported setting.',
+        })))
+      })
+      .catch(() => {})
+  }, [])
+
+  const checks = liveChecks ?? complianceChecks
+
+  const filtered = checks.filter(c => {
     if (categoryFilter && c.category !== categoryFilter) return false
     if (severityFilter && c.severity !== severityFilter) return false
     return true
@@ -96,9 +123,9 @@ export function ChecksPage() {
     return b.failingDeviceCount - a.failingDeviceCount
   })
 
-  const criticalCount = complianceChecks.filter(c => c.severity === 'critical').length
-  const warningCount = complianceChecks.filter(c => c.severity === 'warning').length
-  const totalFailing = complianceChecks.reduce((s, c) => s + c.failingDeviceCount, 0)
+  const criticalCount = checks.filter(c => c.severity === 'critical').length
+  const warningCount = checks.filter(c => c.severity === 'warning').length
+  const totalFailing = checks.reduce((s, c) => s + c.failingDeviceCount, 0)
 
   return (
     <>
@@ -107,13 +134,13 @@ export function ChecksPage() {
       <div className="space-y-4">
         <PageHeader
           title="Compliance Checks"
-          description={`${complianceChecks.length} checks defined · ${totalFailing} total failing instances.`}
+          description={`${checks.length} checks defined · ${totalFailing} total failing instances.`}
         />
 
         {/* Summary row */}
         <div className="grid grid-cols-3 gap-3">
           {[
-            { label: 'Total Checks', value: complianceChecks.length, color: undefined },
+            { label: 'Total Checks', value: checks.length, color: undefined },
             { label: 'Critical Checks', value: criticalCount, color: STATUS_COLORS.critical },
             { label: 'Warning Checks', value: warningCount, color: STATUS_COLORS.warning },
           ].map(({ label, value, color }) => (

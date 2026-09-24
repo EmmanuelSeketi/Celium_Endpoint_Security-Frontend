@@ -32,9 +32,12 @@ export type MalwareStatusApi = {
   security_intelligence_updated_at?: string
   definition_age?: number
   realtime_protection: boolean
-  last_scan_result: string
+  cloud_delivered_protection: boolean
+  automatic_sample_submission: boolean
+  dev_drive_protection: boolean
+  last_scan_result: 'clean' | 'threats_found' | 'scan_failed'
   last_scan_at?: string
-  last_scan_type?: string
+  last_scan_type?: 'quick' | 'full' | 'custom'
   last_scan_duration_seconds?: number
   last_scan_files?: number
   tamper_protection: boolean
@@ -47,10 +50,19 @@ export type ManagedDevice = {
   hostname: string
   os: 'windows' | 'macos' | 'linux'
   os_version: string
+  os_caption?: string
   ip_address: string
+  mac_address?: string
+  username?: string
   status: 'active' | 'inactive' | 'error'
   last_checkin?: string
   created_at: string
+  compliance_score: number
+  passed_checks: number
+  failed_checks: number
+  update_history?: Record<string, unknown>[]
+  updates_automatic: boolean
+  updates_pause_until?: string
   malware?: MalwareStatusApi
   patch_status?: {
     missing_critical: number
@@ -76,7 +88,29 @@ export type SecurityCheck = {
   category: string
   title: string
   description?: string
+  remediation?: string
+  failing_device_count: number
   is_active: boolean
+}
+
+export type DeviceCheck = {
+  check_id: string
+  title: string
+  category: string
+  description?: string
+  severity: string
+  status: 'passed' | 'failed' | 'error' | 'pending'
+  details?: string
+  checked_at?: string
+}
+
+export type DeviceProtectionHistory = {
+  id: string
+  threat_name: string
+  file_path: string
+  action: string
+  severity: string
+  detected_at: string
 }
 
 export type Alert = {
@@ -87,6 +121,8 @@ export type Alert = {
   status: 'active' | 'acknowledged' | 'resolved'
   alert_type: string
   created_at: string
+  device_id?: string
+  device_name?: string
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -150,6 +186,24 @@ async function authenticatedRequest<T>(path: string, init: RequestInit = {}): Pr
 
 export async function getDevices() {
   const result = await authenticatedRequest<ApiSuccess<ManagedDevice[]>>('/devices')
+  return result.data
+}
+
+export async function getDeviceChecks(deviceId: string) {
+  const result = await authenticatedRequest<ApiSuccess<DeviceCheck[]>>(`/devices/${deviceId}/checks`)
+  return result.data
+}
+
+export async function getDeviceProtectionHistory(deviceId: string) {
+  const result = await authenticatedRequest<ApiSuccess<DeviceProtectionHistory[]>>(`/devices/${deviceId}/protection-history`)
+  return result.data
+}
+
+export async function queueUpdateCommand(deviceId: string, command: string, pauseUntil?: string) {
+  const result = await authenticatedRequest<ApiSuccess<Record<string, never>>>(`/devices/${deviceId}/update-command`, {
+    method: 'POST',
+    body: JSON.stringify({ command, pause_until: pauseUntil }),
+  })
   return result.data
 }
 

@@ -203,7 +203,7 @@ export function OSComplianceBarChart({ data, height = 140 }: OSComplianceBarChar
         <YAxis tick={OS_AXIS_STYLE} axisLine={false} tickLine={false} domain={[0, 100]} />
         <Tooltip content={<ChartTooltip />} cursor={{ fill: 'var(--surface-hover)', stroke: CHART_GRID, strokeWidth: 1 }} />
         <Bar dataKey="score" name="Average Compliance %" radius={[0, 0, 0, 0]}>
-          <LabelList dataKey="score" position="top" formatter={(value: number) => `${value}%`} fill="var(--foreground)" fontSize={11} fontWeight={600} />
+          <LabelList dataKey="score" position="top" formatter={(value) => `${value ?? 0}%`} fill="var(--foreground)" fontSize={11} fontWeight={600} />
           {data.map((entry) => (
             <Cell key={entry.os} fill={osColors[entry.os] ?? BRAND} />
           ))}
