@@ -432,26 +432,32 @@ export function PatchCompliancePage() {
         <div className="overflow-x-auto rounded-md border border-border bg-surface">
           <div className="min-w-[760px]">
             <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white border-b border-border">
-              <span className="col-span-3">Device</span>
+              <span className="col-span-2">Device</span>
               <span className="col-span-2">OS</span>
-              <span className="col-span-2 text-center">Missing Critical</span>
-              <span className="col-span-2 text-center">Missing Total</span>
-              <span className="col-span-3">Update State</span>
+              <span className="col-span-2">OS Version</span>
+              <span className="col-span-2 text-center">Update Policy</span>
+              <span className="col-span-2 text-center">Pending Reboot</span>
+              <span className="col-span-2">Update State</span>
             </div>
             <div className="divide-y divide-border">
               {pagedDevices.map(d => (
                 <div key={d.id} className="grid grid-cols-12 items-center px-3 py-2 text-[13px] transition-colors hover:bg-surface-hover">
-                  <div className="col-span-3">
+                  <div className="col-span-2">
                     <span className="truncate font-mono text-[12px] text-black dark:text-white">{d.name}</span>
                   </div>
-                  <span className="col-span-2 truncate text-[12px] text-black dark:text-white">{d.osCaption ? `${d.osCaption} · ` : ''}{d.osVersion.split(' (')[0]}</span>
-                  <span className={cn('col-span-2 text-center font-mono font-semibold', d.patchStatus.missingCritical > 0 ? 'text-[#F04438]' : 'text-[#16A34A]')}>
-                    {d.patchStatus.missingCritical}
+                  <span className="col-span-2 truncate text-[12px] text-black dark:text-white" title={d.osCaption ?? undefined}>
+                    {d.osCaption || 'Not reported'}
                   </span>
-                  <span className={cn('col-span-2 text-center font-mono', d.patchStatus.missingTotal > 5 ? 'text-[#F79009]' : 'text-black dark:text-white')}>
-                    {d.patchStatus.missingTotal}
+                  <span className="col-span-2 truncate font-mono text-[12px] text-black dark:text-white" title={d.osVersion}>
+                    {d.osVersion || 'Not reported'}
                   </span>
-                  <span className="col-span-3">
+                  <span className="col-span-2 text-center text-[12px] text-black dark:text-white">
+                    {d.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
+                  </span>
+                  <span className={cn('col-span-2 text-center text-[12px] font-medium', d.patchStatus.pendingReboot ? 'text-[#F79009]' : 'text-[#16A34A]')}>
+                    {d.patchStatus.pendingReboot ? 'Required' : 'No'}
+                  </span>
+                  <span className="col-span-2">
                     {(() => {
                       const state = getUpdateState(d)
                       const Icon = state.icon
