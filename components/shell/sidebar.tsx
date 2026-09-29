@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useSidebar } from '@/lib/sidebar-context'
+import { useAuth } from '@/lib/auth-provider'
 import { cn } from '@/lib/utils'
 import {
   LayoutDashboard,
@@ -15,6 +16,8 @@ import {
   Settings,
   PanelLeftClose,
   PanelLeftOpen,
+  Building2,
+  Users,
 } from 'lucide-react'
 
 const NAV_ITEMS = [
@@ -27,6 +30,12 @@ const NAV_ITEMS = [
   { label: 'Reports', href: '/reports', icon: FileText },
 ]
 
+const PLATFORM_ITEMS = [
+  { label: 'Platform dashboard', href: '/platform', icon: Building2 },
+  { label: 'Organizations', href: '/platform/organizations', icon: Network },
+  { label: 'Platform admins', href: '/platform/admins', icon: Users },
+]
+
 const BOTTOM_ITEMS = [
   { label: 'Settings', href: '/settings', icon: Settings },
 ]
@@ -34,6 +43,7 @@ const BOTTOM_ITEMS = [
 export function Sidebar() {
   const { collapsed, setCollapsed } = useSidebar()
   const pathname = usePathname()
+  const { admin } = useAuth()
 
   function isActive(href: string) {
     if (href === '/') return pathname === '/'
@@ -82,6 +92,17 @@ export function Sidebar() {
             )
           })}
         </ul>
+        {admin?.is_platform_admin && (
+          <>
+            {!collapsed && <p className="px-2.5 pb-1 pt-5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">Platform</p>}
+            <ul className="space-y-0.5">
+              {PLATFORM_ITEMS.map(({ label, href, icon: Icon }) => {
+                const active = isActive(href)
+                return <li key={href}><Link href={href} className={cn('flex items-center gap-2.5 rounded-md text-[12px] font-medium transition-colors', collapsed ? 'h-9 px-2 justify-center' : 'h-9 px-2.5', active ? 'bg-brand text-white' : 'text-foreground hover:bg-surface-hover')} title={collapsed ? label : undefined}><Icon size={16} strokeWidth={1.5} />{!collapsed && <span>{label}</span>}</Link></li>
+              })}
+            </ul>
+          </>
+        )}
       </nav>
 
       {/* Footer */}

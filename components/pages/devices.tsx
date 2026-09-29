@@ -2,13 +2,14 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
-import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Laptop, CheckCircle2, XCircle, RefreshCw, Info, Megaphone, PauseCircle, History, Settings2, Check, Shield, ShieldCheck, ShieldAlert, Lock, Bug, Activity, User } from 'lucide-react'
+import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Laptop, CheckCircle2, XCircle, RefreshCw, Info, Megaphone, PauseCircle, History, Check, Shield, ShieldCheck, ShieldAlert, Lock, Bug, Activity, User, Plus, Loader2, AlertTriangle, Play, Pencil, Trash2 } from 'lucide-react'
 import { Gauge } from '@mui/x-charts/Gauge'
-import { getDevices, getDeviceChecks, getDeviceProtectionHistory, queueUpdateCommand, type DeviceCheck, type DeviceProtectionHistory, type ManagedDevice } from '@/lib/api-client'
+import { getDevices, getDeviceChecks, getDeviceProtectionHistory, getDeviceScanHistory, queueUpdateCommand, waitForDeviceCommand, cancelDeviceCommand, updateDevice as updateDeviceApi, deleteDevice as deleteDeviceApi, provisionDevice as provisionDeviceApi, type DeviceCheck, type DeviceProtectionHistory, type DeviceScanHistory, type ManagedDevice } from '@/lib/api-client'
 import { devices as demoDevices } from '@/lib/mock-data'
 import { useDataMode } from '@/lib/data-mode-provider'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { getDefinitionAgeColor, STATUS_COLORS } from '@/lib/theme'
 import type { Device, OS, DeviceStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
@@ -20,7 +21,7 @@ const PAGE_SIZE = 10
 function managedDeviceToDevice(managedDevice: ManagedDevice): Device {
   const lastSeen = managedDevice.last_checkin ?? managedDevice.created_at
   const complianceScore = managedDevice.compliance_score ?? 0
-  const reportedChecks = (managedDevice.passed_checks ?? 0) + (managedDevice.failed_checks ?? 0)
+  const reportedChecks = (managedDevice.passed_checks ?? 0) + (managedDevice.failed_checks ?? 0) + (managedDevice.error_checks ?? 0)
   const status: DeviceStatus = reportedChecks > 0
     ? complianceScore >= 85 ? 'compliant' : complianceScore >= 65 ? 'warning' : 'critical'
     : managedDevice.status === 'active' ? 'compliant' : managedDevice.status === 'error' ? 'critical' : 'warning'
@@ -41,6 +42,7 @@ function managedDeviceToDevice(managedDevice: ManagedDevice): Device {
     status,
     failedChecks: managedDevice.failed_checks ?? 0,
     passedChecks: managedDevice.passed_checks ?? 0,
+    errorChecks: managedDevice.error_checks ?? 0,
     lastSeen,
     lastScanned: lastSeen,
     malwareStatus: {
@@ -150,17 +152,17 @@ function getMalwareRows(device: Device): { provider: string; summary: string; ro
       summary: malware.realtimeProtection ? 'Protection is active' : 'Action needed',
         rows: [
           { label: 'Security intelligence', value: `${malware.definitionAge} day${malware.definitionAge === 1 ? '' : 's'} old`, color: getDefinitionAgeColor(malware.definitionAge) },
-          { label: 'Security intelligence status', value: malware.definitionAge <= 3 ? 'Up to date' : 'Update required', color: malware.definitionAge <= 3 ? protectionColor : STATUS_COLORS.warning },
+          { label: 'Security intelligence status', value: malware.definitionAge <= 3 ? 'Up to date' : 'Update required', color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
           { label: 'Security intelligence version', value: malware.securityIntelligenceVersion ?? 'Not reported', mono: true },
-          { label: 'Last update', value: malware.securityIntelligenceUpdatedAt ? format(new Date(malware.securityIntelligenceUpdatedAt), 'MMM d, yyyy HH:mm') : format(new Date(device.lastScanned), 'MMM d, yyyy HH:mm'), color: malware.definitionAge <= 3 ? protectionColor : STATUS_COLORS.warning },
-          { label: 'Update check', value: malware.definitionAge <= 3 ? 'No action needed' : 'Check for updates', color: malware.definitionAge <= 3 ? protectionColor : STATUS_COLORS.warning },
+          { label: 'Last update', value: malware.securityIntelligenceUpdatedAt ? format(new Date(malware.securityIntelligenceUpdatedAt), 'MMM d, yyyy HH:mm') : format(new Date(device.lastScanned), 'MMM d, yyyy HH:mm'), color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
+          { label: 'Update check', value: malware.definitionAge <= 3 ? 'No action needed' : 'Check for updates', color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
           { label: 'Real-time protection', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
-          { label: 'Dev Drive protection', value: malware.devDriveProtection ? 'Enabled' : 'Disabled', color: malware.devDriveProtection ? protectionColor : STATUS_COLORS.critical },
-          { label: 'Cloud-delivered protection', value: malware.cloudDeliveredProtection ? 'Enabled' : 'Disabled', color: malware.cloudDeliveredProtection ? protectionColor : STATUS_COLORS.critical },
-          { label: 'Automatic sample submission', value: malware.automaticSampleSubmission ? 'Enabled' : 'Disabled', color: malware.automaticSampleSubmission ? protectionColor : STATUS_COLORS.critical },
-          { label: 'Tamper protection', value: malware.tamperProtection ? 'Enabled' : 'Disabled', color: malware.tamperProtection ? protectionColor : STATUS_COLORS.critical },
+          { label: 'Dev Drive protection', value: malware.devDriveProtection ? 'Enabled' : 'Disabled', color: malware.devDriveProtection ? STATUS_COLORS.compliant : STATUS_COLORS.critical },
+          { label: 'Cloud-delivered protection', value: malware.cloudDeliveredProtection ? 'Enabled' : 'Disabled', color: malware.cloudDeliveredProtection ? STATUS_COLORS.compliant : STATUS_COLORS.critical },
+          { label: 'Automatic sample submission', value: malware.automaticSampleSubmission ? 'Enabled' : 'Disabled', color: malware.automaticSampleSubmission ? STATUS_COLORS.compliant : STATUS_COLORS.critical },
+          { label: 'Tamper protection', value: malware.tamperProtection ? 'Enabled' : 'Disabled', color: malware.tamperProtection ? STATUS_COLORS.compliant : STATUS_COLORS.critical },
           { label: 'Controlled folder access', value: malware.tamperProtection ? 'Review settings' : 'Not enabled', color: malware.tamperProtection ? STATUS_COLORS.warning : STATUS_COLORS.critical },
-          { label: 'Ransomware protection', value: malware.tamperProtection ? 'No action needed' : 'Review settings', color: malware.tamperProtection ? protectionColor : STATUS_COLORS.warning },
+          { label: 'Ransomware protection', value: malware.tamperProtection ? 'No action needed' : 'Review settings', color: malware.tamperProtection ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
           { label: 'Protection History', value: String(malware.quarantineCount), mono: true },
         ],
     }
@@ -302,12 +304,19 @@ function OSIcon({ os, className }: { os: OS; className?: string }) {
 interface DeviceDrawerProps {
   device: Device
   onClose: () => void
+  onRefresh: () => Promise<void>
 }
 
-function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
+function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
   const [tab, setTab] = useState<'overview' | 'checks' | 'updates' | 'malware' | 'history'>('overview')
   const [checks, setChecks] = useState<DeviceCheck[]>([])
   const [checksLoading, setChecksLoading] = useState(false)
+  const [scanHistory, setScanHistory] = useState<DeviceScanHistory[]>([])
+  const [scanHistoryLoading, setScanHistoryLoading] = useState(false)
+  const [commandMessage, setCommandMessage] = useState<string | null>(null)
+  const [activeCommandId, setActiveCommandId] = useState<string | null>(null)
+  const [cancelRequested, setCancelRequested] = useState(false)
+  const [checkProgress, setCheckProgress] = useState<Record<string, 'passed' | 'failed' | 'error'>>({})
   const [updateBannerOpen, setUpdateBannerOpen] = useState(true)
   const [autoUpdateEnabled, setAutoUpdateEnabled] = useState(device.patchStatus.updatesAutomatic ?? false)
   const [pauseDate, setPauseDate] = useState(device.patchStatus.updatesPauseUntil?.slice(0, 10) ?? '')
@@ -325,6 +334,11 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
       .catch(() => setChecks([]))
       .finally(() => setChecksLoading(false))
   }, [device.id])
+
+  useEffect(() => {
+    setAutoUpdateEnabled(device.patchStatus.updatesAutomatic ?? false)
+    setPauseDate(device.patchStatus.updatesPauseUntil?.slice(0, 10) ?? '')
+  }, [device.id, device.patchStatus.updatesAutomatic, device.patchStatus.updatesPauseUntil])
 
   const checkSeverity: Record<string, 'critical' | 'warning' | 'info'> = {
     'chk-001': 'critical', 'chk-002': 'warning', 'chk-004': 'warning', 'chk-007': 'warning',
@@ -344,13 +358,91 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
     : { label: 'Up to date', color: 'var(--status-good)' }
   const sendUpdateCommand = async (command: string, pauseUntil?: string) => {
     setUpdateAction(command)
-    try { await queueUpdateCommand(device.id, command, pauseUntil) } finally { setUpdateAction(null) }
+    setCommandMessage(null)
+    try {
+      const queued = await queueUpdateCommand(device.id, command, pauseUntil)
+      setActiveCommandId(queued.command_id)
+      if (command === 'scan_checks') {
+        setCheckProgress({})
+        setCancelRequested(false)
+      }
+      setCommandMessage('Command queued. Waiting for the endpoint agent to start…')
+      const executionTimeout = command === 'quick_scan'
+        ? 2 * 60 * 60 * 1000
+        : command === 'check_updates' || command === 'check'
+        ? 30 * 60 * 1000
+        : 10 * 60 * 1000
+      const progressPollInterval = command === 'scan_checks' ? 500 : 2000
+      const outcome = await waitForDeviceCommand(device.id, queued.command_id, status => {
+        const label = command === 'quick_scan' ? 'Quick malware scan' : command === 'scan_checks' ? 'Compliance checks' : command === 'check_updates' || command === 'check' ? 'Windows Update scan' : 'Update policy change'
+        const progress = status.result?.match(/^check_progress:([^:]+):(passed|failed|error)$/)
+        if (progress) setCheckProgress(current => ({ ...current, [progress[1]]: progress[2] as 'passed' | 'failed' | 'error' }))
+        setCommandMessage(status.status === 'running' ? `${label} running on endpoint…` : 'Command queued. Waiting for the endpoint agent to start…')
+      }, progressPollInterval, executionTimeout)
+      if (!outcome) {
+        setCommandMessage('Still waiting for the endpoint. Check that its agent is online.')
+      } else if (outcome.status === 'failed') {
+        setCommandMessage(outcome.result || 'The endpoint could not complete this action.')
+      } else if (outcome.status === 'cancelled') {
+        setCommandMessage(outcome.result || 'Checks cancelled.')
+        if (command === 'scan_checks') {
+          await onRefresh()
+          const [latestChecks, latestHistory] = await Promise.all([getDeviceChecks(device.id), getDeviceScanHistory(device.id)])
+          setChecks(latestChecks)
+          setScanHistory(latestHistory)
+        }
+      } else {
+        setCommandMessage(outcome.result || 'Completed just now.')
+        if (command === 'automatic_on') setAutoUpdateEnabled(true)
+        if (command === 'automatic_off') setAutoUpdateEnabled(false)
+        await onRefresh()
+        if (command === 'scan_checks') {
+          const [latestChecks, latestHistory] = await Promise.all([getDeviceChecks(device.id), getDeviceScanHistory(device.id)])
+          setChecks(latestChecks)
+          setScanHistory(latestHistory)
+          setCheckProgress({})
+        }
+      }
+    } catch (error) {
+      setCommandMessage(error instanceof Error ? error.message : 'Unable to queue command')
+    } finally { setUpdateAction(null); setActiveCommandId(null); setCancelRequested(false) }
   }
+  async function cancelComplianceScan() {
+    if (!activeCommandId) return
+    setCancelRequested(true)
+    setCommandMessage('Cancellation requested. The agent will stop after the current check…')
+    try {
+      await cancelDeviceCommand(device.id, activeCommandId)
+    } catch (error) {
+      setCancelRequested(false)
+      setCommandMessage(error instanceof Error ? error.message : 'Unable to request check cancellation')
+    }
+  }
+  const checkExecutionOrder = ['chk-001', 'chk-002', 'chk-004', 'chk-008', 'chk-010', 'chk-011', 'chk-012', 'chk-014', 'chk-015', 'chk-007', 'chk-016', 'chk-017', 'chk-020', 'chk-021']
+  const currentCheckId = updateAction === 'scan_checks' ? checkExecutionOrder.find(checkId => !checkProgress[checkId]) : undefined
+  const currentCheckNumber = currentCheckId ? checkExecutionOrder.indexOf(currentCheckId) + 1 : checkExecutionOrder.length
+  useEffect(() => {
+    if (tab !== 'history') return
+    setScanHistoryLoading(true)
+    getDeviceScanHistory(device.id).then(setScanHistory).catch(() => setScanHistory([])).finally(() => setScanHistoryLoading(false))
+  }, [device.id, tab])
   const openProtectionHistory = () => {
     setProtectionHistoryOpen(true)
     setProtectionHistoryLoading(true)
     void getDeviceProtectionHistory(device.id)
-      .then(setProtectionHistory)
+      .then(items => {
+        const incidents: DeviceProtectionHistory[] = []
+        for (const item of [...items].sort((left, right) => new Date(left.detected_at).getTime() - new Date(right.detected_at).getTime())) {
+          const existing = incidents.find(incident => incident.threat_name === item.threat_name && incident.file_path === item.file_path && incident.severity === item.severity && Math.abs(new Date(incident.detected_at).getTime() - new Date(item.detected_at).getTime()) <= 5 * 60 * 1000)
+          if (existing) {
+            existing.occurrences = (existing.occurrences ?? 1) + 1
+            existing.action = item.action
+          } else {
+            incidents.push({ ...item, occurrences: 1 })
+          }
+        }
+        setProtectionHistory(incidents.reverse())
+      })
       .catch(() => setProtectionHistory([]))
       .finally(() => setProtectionHistoryLoading(false))
   }
@@ -415,8 +507,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                   <h3 className="text-[14px] font-semibold text-foreground">Endpoint checks</h3>
                   <p className="mt-1 text-[12px] text-muted-foreground">Latest compliance result reported by this device.</p>
                 </div>
-                <span className="font-mono text-[12px] text-muted-foreground">{device.passedChecks} passed · {device.failedChecks} failed</span>
+                <div className="flex items-center gap-3"><span className="font-mono text-[12px] text-muted-foreground">{device.passedChecks} passed · {device.failedChecks} failed · {device.errorChecks ?? 0} errors</span>{updateAction === 'scan_checks' ? <button type="button" disabled={cancelRequested} onClick={() => void cancelComplianceScan()} className="rounded-md border border-status-critical px-3 py-1.5 text-[12px] font-medium text-status-critical disabled:opacity-50">{cancelRequested ? 'Cancelling…' : 'Cancel checks'}</button> : <button type="button" onClick={() => void sendUpdateCommand('scan_checks')} className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white"><Play size={13} />Run checks</button>}</div>
               </div>
+              {commandMessage && <p className="text-[12px] text-muted-foreground">{commandMessage}</p>}
+              {updateAction === 'scan_checks' && <p className="flex items-center gap-2 text-[11px] font-medium text-brand"><Loader2 size={12} className="animate-spin" />Check {Math.min(currentCheckNumber, checkExecutionOrder.length)} of {checkExecutionOrder.length}{currentCheckId ? ` · ${checks.find(check => check.check_id === currentCheckId)?.title ?? currentCheckId}` : ' · Finalizing results'}</p>}
               {checksLoading ? (
                 <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground">Loading check results...</div>
               ) : checks.length === 0 ? (
@@ -424,7 +518,8 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
               ) : (
                 <div className="divide-y divide-border rounded-md border border-border bg-surface">
                   {checks.map(check => {
-                    const statusColor = check.status === 'passed' ? 'var(--status-good)' : check.status === 'failed' ? STATUS_COLORS.critical : check.status === 'error' ? STATUS_COLORS.warning : 'var(--status-unknown)'
+                    const displayStatus = checkProgress[check.check_id] ?? check.status
+                    const statusColor = displayStatus === 'passed' ? 'var(--status-good)' : displayStatus === 'failed' ? STATUS_COLORS.critical : displayStatus === 'error' ? STATUS_COLORS.warning : 'var(--status-unknown)'
                     const severity = checkSeverity[check.check_id] ?? 'info'
                     return (
                       <div key={check.check_id} className="space-y-2 px-3 py-3">
@@ -437,10 +532,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                             </div>
                             <p className="mt-1 pl-4 text-[11px] text-muted-foreground">{check.category.replace('_', ' ')}</p>
                           </div>
-                          <span className="shrink-0 text-[11px] font-semibold capitalize" style={{ color: statusColor }}>{check.status}</span>
+                          <span className="inline-flex shrink-0 items-center gap-1.5 text-[11px] font-semibold capitalize" style={{ color: statusColor }}>{currentCheckId === check.check_id && <Loader2 size={12} className="animate-spin" />}{displayStatus}</span>
                         </div>
                         {check.details && <p className="pl-4 text-[11px] leading-relaxed text-foreground">{check.details}</p>}
-                        <p className="pl-4 text-[10px] text-muted-foreground">{check.checked_at ? `Checked ${formatDistanceToNow(new Date(check.checked_at), { addSuffix: true })}` : 'Not checked yet'}</p>
+                        <p className="pl-4 text-[10px] text-muted-foreground">{checkProgress[check.check_id] ? 'Checked just now' : check.checked_at ? `Checked ${formatDistanceToNow(new Date(check.checked_at), { addSuffix: true })}` : 'Not checked yet'}</p>
                       </div>
                     )
                   })}
@@ -491,6 +586,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                     <p className="flex items-center gap-1.5 font-medium text-black dark:text-white">
                       <XCircle size={13} strokeWidth={2.25} className="text-[var(--status-critical)]" />
                       {device.failedChecks} failed
+                    </p>
+                    <p className="flex items-center gap-1.5 font-medium text-black dark:text-white">
+                      <AlertTriangle size={13} strokeWidth={2.25} className="text-[var(--status-warning)]" />
+                      {device.errorChecks ?? 0} errors
                     </p>
                   </div>
                 </div>
@@ -553,6 +652,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
 
           {tab === 'updates' && (
             <div className="space-y-4">
+              {commandMessage && <p className="text-[12px] text-muted-foreground">{commandMessage}</p>}
               {(() => {
                 const hasMissing = device.patchStatus.missingTotal > 0
                 const isUpToDate = updateState.label === 'Up to date'
@@ -581,10 +681,11 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                       </div>
                       <button
                         type="button"
-                        onClick={() => void sendUpdateCommand('check')}
+                        disabled={updateAction === 'check_updates'}
+                        onClick={() => void sendUpdateCommand('check_updates')}
                         className="shrink-0 rounded-md bg-[#303030] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#3b3b3b]"
                       >
-                        Check for updates
+                        {updateAction === 'check_updates' ? <span className="inline-flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" />Running…</span> : 'Check for updates'}
                       </button>
                     </div>
 
@@ -623,9 +724,10 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                           </div>
                           <button
                             type="button"
+                            disabled={updateAction === (autoUpdateEnabled ? 'automatic_off' : 'automatic_on')}
                             role="switch"
                             aria-checked={autoUpdateEnabled}
-                            onClick={() => { const next = !autoUpdateEnabled; setAutoUpdateEnabled(next); void sendUpdateCommand(next ? 'automatic_on' : 'automatic_off') }}
+                            onClick={() => { const next = !autoUpdateEnabled; void sendUpdateCommand(next ? 'automatic_on' : 'automatic_off') }}
                             className={cn('relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors', autoUpdateEnabled ? 'bg-brand' : 'bg-border')}
                           >
                             <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform', autoUpdateEnabled ? 'translate-x-[18px]' : 'translate-x-1')} />
@@ -644,11 +746,13 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                           <input type="date" value={pauseDate} min={new Date().toISOString().slice(0, 10)} onChange={event => setPauseDate(event.target.value)} className="h-7 rounded border border-border bg-card px-2 text-[11px] text-foreground" />
                           <button
                             type="button"
+                            disabled={!pauseDate || updateAction === 'pause'}
                             onClick={() => pauseDate && void sendUpdateCommand('pause', `${pauseDate}T23:59:59Z`)}
                             className="shrink-0 rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-black dark:text-white transition-colors hover:bg-surface-hover"
                           >
-                            {updateOptions.pause.actionLabel}
+                            {updateAction === 'pause' ? <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Applying…</span> : updateOptions.pause.actionLabel}
                           </button>
+                          {device.patchStatus.updatesPauseUntil && <button type="button" onClick={() => void sendUpdateCommand('resume')} className="rounded-md px-2 py-1 text-[11px] text-brand hover:bg-surface-hover">Resume</button>}
                           </div>
                         </div>
 
@@ -679,6 +783,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
 
           {tab === 'malware' && (
             <div className="space-y-4">
+              {commandMessage && <p className="text-[12px] text-muted-foreground">{commandMessage}</p>}
               {(() => {
                 const malwareDetails = getMalwareRows(device)
                 const protectionActive = device.malwareStatus.realtimeProtection
@@ -736,10 +841,11 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
                       {device.os === 'Windows' && (
                         <button
                           type="button"
-                          onClick={() => undefined}
+                            disabled={updateAction === 'quick_scan'}
+                            onClick={() => void sendUpdateCommand('quick_scan')}
                           className="shrink-0 rounded-md bg-[#303030] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#3b3b3b]"
                         >
-                          Quick scan
+                          {updateAction === 'quick_scan' ? <span className="inline-flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" />Scanning…</span> : 'Quick scan'}
                         </button>
                       )}
                     </div>
@@ -809,12 +915,14 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
           {tab === 'history' && (
             <div className="space-y-4">
               <p className="text-[13px] font-semibold text-foreground">Compliance scan history</p>
-              <div className="bg-surface border border-border rounded-md divide-y divide-border">
-                {[...Array(5)].map((_, i) => {
-                  const score = device.complianceScore - i * 2
-                  return <div key={i} className="flex items-center justify-between px-3 py-2.5"><span className="text-[12px] text-black dark:text-white font-mono">{format(new Date(Date.now() - i * 3 * 3600 * 1000), 'MMM d, HH:mm')}</span><span className="text-[12px] font-mono" style={{ color: SEVERITY[scoreToSeverity(Math.max(0, score))].dot }}>{Math.max(0, score)}%</span><StatusIndicator status={scoreToSeverity(Math.max(0, score))} /></div>
-                })}
-              </div>
+              {scanHistoryLoading ? <p className="py-8 text-center text-[12px] text-muted-foreground">Loading scan history…</p> : (() => {
+                const runs = new Map<string, DeviceScanHistory[]>()
+                for (const result of scanHistory) runs.set(result.checked_at, [...(runs.get(result.checked_at) ?? []), result])
+                return <div className="divide-y divide-border rounded-md border border-border bg-surface">{[...runs.entries()].map(([timestamp, results]) => {
+                  const failed = results.filter(result => result.status === 'failed' || result.status === 'error').length
+                  return <div key={timestamp} className="px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[12px] text-foreground">{format(new Date(timestamp), 'MMM d, yyyy HH:mm:ss')}</span><span className="text-[11px] text-muted-foreground">{results.length} checks · {failed} failed</span></div><div className="mt-2 divide-y divide-border">{results.map(result => <div key={result.id} className="flex items-start justify-between gap-3 py-2"><div><p className="text-[12px] font-medium text-foreground">{result.check_title}</p>{result.details && <p className="mt-0.5 text-[11px] text-muted-foreground">{result.details}</p>}</div><span className={cn('text-[11px] font-semibold capitalize', result.status === 'passed' ? 'text-status-compliant' : result.status === 'failed' ? 'text-status-critical' : 'text-status-warning')}>{result.status}</span></div>)}</div></div>
+                })}{scanHistory.length === 0 && <p className="px-3 py-8 text-center text-[12px] text-muted-foreground">No compliance scan history has been reported by this endpoint.</p>}</div>
+              })()}
             </div>
           )}
         </div>
@@ -838,7 +946,7 @@ function DeviceDrawer({ device, onClose }: DeviceDrawerProps) {
               <div className="flex items-center justify-between border-b border-border px-4 py-3"><p className="text-[13px] font-semibold text-foreground">Protection History</p><button type="button" onClick={() => setProtectionHistoryOpen(false)} aria-label="Close protection history"><X size={14} /></button></div>
               {protectionHistoryLoading ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">Loading protection history...</p> : <div className="max-h-[520px] divide-y divide-border overflow-y-auto">{protectionHistory.length === 0 ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">No protection history reported for this endpoint.</p> : protectionHistory.map(item => {
                 const expanded = expandedProtectionId === item.id
-                return <div key={item.id} className="px-4 py-1"><button type="button" onClick={() => setExpandedProtectionId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left"><span className="min-w-0 truncate text-[12px] font-semibold text-foreground">{item.threat_name}</span><span className="inline-flex shrink-0 items-center gap-2 text-[11px] capitalize text-muted-foreground"><span>{item.action}</span><ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} /></span></button>{expanded && <div className="space-y-2 border-t border-border pb-3 pt-2"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Affected item</p><p className="break-all text-[11px] text-foreground">{item.file_path || 'Not reported'}</p></div><div className="grid grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</p><p className="text-[11px] capitalize text-foreground">{item.action}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Severity</p><p className="text-[11px] capitalize text-foreground">{item.severity}</p></div></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Detected</p><p className="text-[11px] text-foreground">{format(new Date(item.detected_at), 'MMM d, yyyy HH:mm')}</p></div></div>}</div>
+                return <div key={item.id} className="px-4 py-1"><button type="button" onClick={() => setExpandedProtectionId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left"><span className="min-w-0 truncate text-[12px] font-semibold text-foreground">{item.threat_name}</span><span className="inline-flex shrink-0 items-center gap-2 text-[11px] capitalize text-muted-foreground"><span>{item.action}</span>{(item.occurrences ?? 1) > 1 && <span className="rounded border border-border px-1.5 py-0.5 normal-case">{item.occurrences} reports</span>}<ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} /></span></button>{expanded && <div className="space-y-2 border-t border-border pb-3 pt-2"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Affected item</p><p className="break-all text-[11px] text-foreground">{item.file_path || 'Not reported'}</p></div><div className="grid grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</p><p className="text-[11px] capitalize text-foreground">{item.action}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Severity</p><p className="text-[11px] capitalize text-foreground">{item.severity}</p></div></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Detected</p><p className="text-[11px] text-foreground">{format(new Date(item.detected_at), 'MMM d, yyyy HH:mm')}</p></div></div>}</div>
               })}</div>}
             </div>
           </div>
@@ -860,6 +968,11 @@ export function DevicesPage() {
   const [statusFilter, setStatusFilter] = useState<DeviceStatus | ''>('')
   const [deptFilter, setDeptFilter] = useState('')
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null)
+  const [editingDevice, setEditingDevice] = useState<Device | null>(null)
+  const [showCreateDevice, setShowCreateDevice] = useState(false)
+  const [deviceForm, setDeviceForm] = useState({ deviceId: '', hostname: '', os: 'windows' as ManagedDevice['os'], osVersion: '', ipAddress: '', username: '' })
+  const [deviceFormError, setDeviceFormError] = useState<string | null>(null)
+  const [createdAgentToken, setCreatedAgentToken] = useState<string | null>(null)
   const [osOpen, setOsOpen] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   const [deptOpen, setDeptOpen] = useState(false)
@@ -925,6 +1038,64 @@ export function DevicesPage() {
   const currentPage = Math.min(page, totalPages)
   const visibleDevices = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
 
+  const staleCount = allDevices.filter(device => Date.now() - new Date(device.lastSeen).getTime() > 24 * 60 * 60 * 1000).length
+  const criticalCount = allDevices.filter(device => scoreToSeverity(device.complianceScore) === 'critical').length
+  const activeCount = allDevices.filter(device => Date.now() - new Date(device.lastSeen).getTime() <= 60 * 60 * 1000).length
+
+  function openCreateDevice() {
+    setEditingDevice(null)
+    setCreatedAgentToken(null)
+    setDeviceForm({ deviceId: '', hostname: '', os: 'windows', osVersion: '', ipAddress: '', username: '' })
+    setDeviceFormError(null)
+    setShowCreateDevice(true)
+  }
+
+  function openEditDevice(event: React.MouseEvent, device: Device) {
+    event.stopPropagation()
+    setEditingDevice(device)
+    setCreatedAgentToken(null)
+    setDeviceForm({ deviceId: device.id, hostname: device.name, os: device.os === 'Windows' ? 'windows' : device.os === 'Mac' ? 'macos' : 'linux', osVersion: device.osVersion, ipAddress: device.ip === 'Not reported' ? '' : device.ip, username: device.username === 'Not reported' ? '' : device.username })
+    setDeviceFormError(null)
+    setShowCreateDevice(true)
+  }
+
+  async function saveDevice(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setDeviceFormError(null)
+    try {
+      if (editingDevice) {
+        const updated = mode === 'demo'
+          ? { ...editingDevice, name: deviceForm.hostname, osVersion: deviceForm.osVersion, ip: deviceForm.ipAddress || 'Not reported', username: deviceForm.username || 'Not reported' }
+          : managedDeviceToDevice(await updateDeviceApi(editingDevice.id, { hostname: deviceForm.hostname, os_version: deviceForm.osVersion, ip_address: deviceForm.ipAddress, username: deviceForm.username }))
+        setAllDevices(items => items.map(item => item.id === editingDevice.id ? updated : item))
+        setSelectedDevice(current => current?.id === updated.id ? updated : current)
+        setShowCreateDevice(false)
+      } else if (mode === 'demo') {
+        const created: Device = { id: deviceForm.deviceId || `demo-${Date.now()}`, name: deviceForm.hostname, assetType: 'workstation', os: deviceForm.os === 'windows' ? 'Windows' : deviceForm.os === 'macos' ? 'Mac' : 'Linux', osVersion: deviceForm.osVersion || 'Not reported', department: 'Not reported', ip: deviceForm.ipAddress || 'Not reported', mac: 'Not reported', username: deviceForm.username || 'Not reported', complianceScore: 0, status: 'warning', failedChecks: 0, passedChecks: 0, lastSeen: new Date().toISOString(), lastScanned: new Date().toISOString(), malwareStatus: { definitionAge: 0, realtimeProtection: false, tamperProtection: false, quarantineCount: 0, lastScanResult: 'scan_failed' }, patchStatus: { missingCritical: 0, missingTotal: 0, pendingReboot: false, lastUpdateCheck: new Date().toISOString(), osEol: false }, domainJoined: false }
+        setAllDevices(items => [created, ...items])
+        setShowCreateDevice(false)
+      } else {
+        const result = await provisionDeviceApi({ device_id: deviceForm.deviceId || crypto.randomUUID(), hostname: deviceForm.hostname, os: deviceForm.os, os_version: deviceForm.osVersion, ip_address: deviceForm.ipAddress })
+        setAllDevices(items => [managedDeviceToDevice(result.device), ...items])
+        setCreatedAgentToken(result.agent_token)
+      }
+    } catch (error) {
+      setDeviceFormError(error instanceof Error ? error.message : 'Unable to save endpoint')
+    }
+  }
+
+  async function removeDevice(event: React.MouseEvent, device: Device) {
+    event.stopPropagation()
+    if (!window.confirm(`Delete ${device.name} and its stored endpoint history?`)) return
+    try {
+      if (mode !== 'demo') await deleteDeviceApi(device.id)
+      setAllDevices(items => items.filter(item => item.id !== device.id))
+      setSelectedDevice(current => current?.id === device.id ? null : current)
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Unable to delete endpoint')
+    }
+  }
+
   function updateSearch(value: string) {
     setSearch(value)
     setPage(1)
@@ -937,138 +1108,92 @@ export function DevicesPage() {
           title="Devices"
           description={`${allDevices.length} endpoints in the fleet.`}
           className="pt-4"
-        >
-          {/* Filter bar */}
-          <div className="flex items-center gap-2 flex-wrap">
+        />
+
+        <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+          <KpiCard label="Total endpoints" value={allDevices.length} description="Registered across this organization" accentColor="#5B7FFF" />
+          <KpiCard label="Recently reporting" value={activeCount} description="Checked in within the last hour" accentColor="#12B76A" />
+          <KpiCard label="Stale endpoints" value={staleCount} description="No check-in for more than 24 hours" accentColor={staleCount ? '#F79009' : '#12B76A'} />
+          <KpiCard label="Critical posture" value={criticalCount} description="Endpoints with critical health status" accentColor={criticalCount ? '#F04438' : '#12B76A'} />
+        </div>
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <button type="button" onClick={openCreateDevice} className="inline-flex h-8 items-center gap-1.5 rounded-md bg-brand px-3 text-[12px] font-medium text-white"><Plus size={14} />Add endpoint</button>
           <div className="relative flex-1 min-w-48 max-w-72">
             <Search size={13} strokeWidth={1.5} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              placeholder="Search by name, IP, user..."
-              value={search}
-              onChange={e => updateSearch(e.target.value)}
-              className="w-full h-8 bg-surface border border-border rounded-md pl-8 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
-            />
+            <input type="text" placeholder="Search by name, IP, user..." value={search} onChange={e => updateSearch(e.target.value)} className="w-full h-8 bg-surface border border-border rounded-md pl-8 pr-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors" />
           </div>
-
-          {/* OS filter */}
           <div className="relative">
-            <button
-              onClick={() => { setOsOpen(!osOpen); setStatusOpen(false); setDeptOpen(false) }}
-              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
-            >
-              OS {osFilter ? <span className="text-brand font-medium">· {osFilter}</span> : ''}
-              <ChevronDown size={12} strokeWidth={2} />
+            <button onClick={() => { setOsOpen(!osOpen); setStatusOpen(false); setDeptOpen(false) }} className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors">
+              OS {osFilter ? <span className="text-brand font-medium">· {osFilter}</span> : ''}<ChevronDown size={12} strokeWidth={2} />
             </button>
-            {osOpen && (
-              <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
-                <button onClick={() => { setOsFilter(''); setPage(1); setOsOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
-                  All OS
-                </button>
-                {OS_OPTIONS.map(o => (
-                  <button key={o} onClick={() => { setOsFilter(o); setPage(1); setOsOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors', osFilter === o && 'font-medium')}>
-                    {o}
-                  </button>
-                ))}
-              </div>
-            )}
+            {osOpen && <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
+              <button onClick={() => { setOsFilter(''); setPage(1); setOsOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">All OS</button>
+              {OS_OPTIONS.map(o => <button key={o} onClick={() => { setOsFilter(o); setPage(1); setOsOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors', osFilter === o && 'font-medium')}>{o}</button>)}
+            </div>}
           </div>
-
-          {/* Status filter */}
           <div className="relative">
-            <button
-              onClick={() => { setStatusOpen(!statusOpen); setOsOpen(false); setDeptOpen(false) }}
-              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
-            >
-              Health {statusFilter ? <span className="text-brand font-medium">· {statusFilter}</span> : ''}
-              <ChevronDown size={12} strokeWidth={2} />
+            <button onClick={() => { setStatusOpen(!statusOpen); setOsOpen(false); setDeptOpen(false) }} className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors">
+              Health {statusFilter ? <span className="text-brand font-medium">· {statusFilter}</span> : ''}<ChevronDown size={12} strokeWidth={2} />
             </button>
-            {statusOpen && (
-              <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
-                <button onClick={() => { setStatusFilter(''); setPage(1); setStatusOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
-                  All Health States
-                </button>
-                {STATUS_OPTIONS.map(s => (
-                  <button key={s} onClick={() => { setStatusFilter(s); setPage(1); setStatusOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors capitalize', statusFilter === s && 'font-medium')}>
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
+            {statusOpen && <div className="absolute top-full left-0 mt-1 w-36 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
+              <button onClick={() => { setStatusFilter(''); setPage(1); setStatusOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">All Health States</button>
+              {STATUS_OPTIONS.map(s => <button key={s} onClick={() => { setStatusFilter(s); setPage(1); setStatusOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors capitalize', statusFilter === s && 'font-medium')}>{s}</button>)}
+            </div>}
           </div>
-
-          {/* Dept filter */}
           <div className="relative">
-            <button
-              onClick={() => { setDeptOpen(!deptOpen); setOsOpen(false); setStatusOpen(false) }}
-              className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors"
-            >
-              Dept {deptFilter ? <span className="text-brand font-medium">· {deptFilter}</span> : ''}
-              <ChevronDown size={12} strokeWidth={2} />
+            <button onClick={() => { setDeptOpen(!deptOpen); setOsOpen(false); setStatusOpen(false) }} className="flex items-center gap-1.5 h-8 px-3 text-[13px] bg-surface border border-border rounded-md text-black dark:text-white hover:text-black dark:hover:text-white transition-colors">
+              Dept {deptFilter ? <span className="text-brand font-medium">· {deptFilter}</span> : ''}<ChevronDown size={12} strokeWidth={2} />
             </button>
-            {deptOpen && (
-              <div className="absolute top-full left-0 mt-1 w-44 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
-                <button onClick={() => { setDeptFilter(''); setPage(1); setDeptOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">
-                  All Departments
-                </button>
-                {deptOptions.map(dept => (
-                  <button key={dept} onClick={() => { setDeptFilter(dept); setPage(1); setDeptOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors', deptFilter === dept && 'font-medium')}>
-                    {dept}
-                  </button>
-                ))}
-              </div>
-            )}
+            {deptOpen && <div className="absolute top-full left-0 mt-1 w-44 bg-surface-elevated border border-border rounded-md shadow-lg z-20 py-1">
+              <button onClick={() => { setDeptFilter(''); setPage(1); setDeptOpen(false) }} className="w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors">All Departments</button>
+              {deptOptions.map(dept => <button key={dept} onClick={() => { setDeptFilter(dept); setPage(1); setDeptOpen(false) }} className={cn('w-full text-left px-3 py-1.5 text-[13px] text-black dark:text-white hover:bg-surface-hover hover:text-black dark:hover:text-white transition-colors', deptFilter === dept && 'font-medium')}>{dept}</button>)}
+            </div>}
           </div>
+          {[osFilter, statusFilter, deptFilter].filter(Boolean).map(f => <span key={f} className="flex items-center gap-1 px-2 py-0.5 bg-brand/15 border border-brand/30 rounded-full text-[12px] text-brand">
+            {f}<button onClick={() => { if (f === osFilter) setOsFilter(''); if (f === statusFilter) setStatusFilter(''); if (f === deptFilter) setDeptFilter(''); setPage(1) }}><X size={11} strokeWidth={2.5} /></button>
+          </span>)}
+          {[osFilter, statusFilter, deptFilter].some(Boolean) && <button onClick={() => { setOsFilter(''); setStatusFilter(''); setDeptFilter(''); setPage(1) }} className="text-[12px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors">Clear all</button>}
+        </div>
 
-          {/* Active filter chips */}
-          {[osFilter, statusFilter, deptFilter].filter(Boolean).map(f => (
-            <span key={f} className="flex items-center gap-1 px-2 py-0.5 bg-brand/15 border border-brand/30 rounded-full text-[12px] text-brand">
-              {f}
-              <button onClick={() => {
-                if (f === osFilter) setOsFilter('')
-                if (f === statusFilter) setStatusFilter('')
-                if (f === deptFilter) setDeptFilter('')
-                setPage(1)
-              }}>
-                <X size={11} strokeWidth={2.5} />
-              </button>
-            </span>
-          ))}
-
-          {[osFilter, statusFilter, deptFilter].some(Boolean) && (
-            <button
-              onClick={() => { setOsFilter(''); setStatusFilter(''); setDeptFilter(''); setPage(1) }}
-              className="text-[12px] text-muted-foreground hover:text-foreground underline underline-offset-2 transition-colors"
-            >
-              Clear all
-            </button>
-          )}
-          </div>
-        </PageHeader>
+        {showCreateDevice && <SectionCard title={editingDevice ? 'Edit endpoint' : 'Add endpoint'} description={editingDevice ? 'Update endpoint inventory fields.' : 'Register a device and create its initial agent credential.'}>
+          <form className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" onSubmit={saveDevice}>
+            {!editingDevice && <input value={deviceForm.deviceId} onChange={event => setDeviceForm(form => ({ ...form, deviceId: event.target.value }))} placeholder="Device ID (optional)" className="h-9 rounded-md border border-border bg-background px-3 text-[13px]" />}
+            <input required value={deviceForm.hostname} onChange={event => setDeviceForm(form => ({ ...form, hostname: event.target.value }))} placeholder="Hostname" className="h-9 rounded-md border border-border bg-background px-3 text-[13px]" />
+            {!editingDevice && <select value={deviceForm.os} onChange={event => setDeviceForm(form => ({ ...form, os: event.target.value as ManagedDevice['os'] }))} className="h-9 rounded-md border border-border bg-background px-3 text-[13px]"><option value="windows">Windows</option><option value="macos">macOS</option><option value="linux">Linux</option></select>}
+            <input value={deviceForm.osVersion} onChange={event => setDeviceForm(form => ({ ...form, osVersion: event.target.value }))} placeholder="OS version" className="h-9 rounded-md border border-border bg-background px-3 text-[13px]" />
+            <input value={deviceForm.ipAddress} onChange={event => setDeviceForm(form => ({ ...form, ipAddress: event.target.value }))} placeholder="IP address" className="h-9 rounded-md border border-border bg-background px-3 text-[13px]" />
+            <input value={deviceForm.username} onChange={event => setDeviceForm(form => ({ ...form, username: event.target.value }))} placeholder="Assigned user" className="h-9 rounded-md border border-border bg-background px-3 text-[13px]" />
+            <div className="flex gap-2 sm:col-span-2 lg:col-span-3"><button type="submit" className="h-9 rounded-md bg-brand px-3 text-[12px] font-medium text-white">{editingDevice ? 'Save endpoint' : 'Register endpoint'}</button><button type="button" onClick={() => setShowCreateDevice(false)} className="h-9 rounded-md border border-border px-3 text-[12px]">Cancel</button></div>
+          </form>
+          {deviceFormError && <p className="mt-2 text-[12px] text-status-critical">{deviceFormError}</p>}
+          {createdAgentToken && <div className="mt-3 rounded-md border border-status-warning/40 bg-status-warningBg/20 p-3"><p className="text-[12px] font-medium">Endpoint registered. Copy this agent token now:</p><p className="mt-1 break-all font-mono text-[11px]">{createdAgentToken}</p></div>}
+        </SectionCard>}
 
         <SectionCard noPadding>
           {loading && <p className="px-3 py-3 text-[12px] text-muted-foreground">Loading endpoints...</p>}
           {loadError && <p className="px-3 py-3 text-[12px] text-status-critical">{loadError}</p>}
-          <table className="w-full table-fixed text-[12px]">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px] table-fixed text-[12px]">
             <colgroup>
-              <col className="w-[19%]" />
-              <col className="w-[13%]" />
+              <col className="w-[18%]" />
               <col className="w-[14%]" />
+              <col className="w-[16%]" />
               <col className="w-[15%]" />
-              <col className="w-[15%]" />
-              <col className="w-[12%]" />
-              <col className="w-[12%]" />
+              <col className="w-[11%]" />
+              <col className="w-[16%]" />
+              <col className="w-[10%]" />
             </colgroup>
             <thead>
               <tr className="border-b border-border">
                 {[
                   { label: 'Device', align: 'left', sortable: false },
-                  { label: 'Asset Type', align: 'left', sortable: false },
                   { label: 'OS', align: 'left', sortable: false },
                   { label: 'IP', align: 'left', sortable: false },
                   { label: 'Health', align: 'left', sortable: false },
                   { label: 'Status', align: 'left', sortable: false },
                   { label: 'Last Seen', align: 'left', sortable: false },
+                  { label: 'Actions', align: 'left', sortable: false },
                 ].map(h => (
                   <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Status' && 'pl-8')}>
                     {h.label}
@@ -1097,11 +1222,6 @@ export function DevicesPage() {
                       <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.name}</span>
                     </td>
                     <td className="px-3">
-                      <span className="text-[12px] font-medium text-black dark:text-white">
-                        {d.assetType === 'dc_server' ? 'DC Server' : d.assetType === 'laptop' ? 'Laptop' : 'Workstation'}
-                      </span>
-                    </td>
-                    <td className="px-3">
                       <div className="flex items-center gap-2">
                         <OSIcon os={d.os} />
                         <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>
@@ -1114,13 +1234,15 @@ export function DevicesPage() {
                     <td className="px-3 pl-8">
                       <ReportingStatusIndicator lastSeen={d.lastSeen} />
                     </td>
-                    <td className="px-3"><span className="text-[12px] font-medium text-black dark:text-white">{hydrated ? formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true }) : '—'}</span></td>
+                    <td className="whitespace-nowrap px-3"><span className="text-[12px] font-medium text-black dark:text-white">{hydrated ? formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true }) : '—'}</span></td>
+                    <td className="px-2"><div className="flex gap-1"><button type="button" title="Edit endpoint" aria-label={`Edit ${d.name}`} onClick={event => openEditDevice(event, d)} className="rounded p-1.5 hover:bg-surface-hover"><Pencil size={14} /></button><button type="button" title="Delete endpoint" aria-label={`Delete ${d.name}`} onClick={event => void removeDevice(event, d)} className="rounded p-1.5 text-status-critical hover:bg-surface-hover"><Trash2 size={14} /></button></div></td>
                   </tr>
                 ))
               )}
             </tbody>
           </table>
-          <div className="px-3 py-2 border-t border-border flex items-center justify-between">
+          </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-3 py-2">
             <p className="text-[12px] font-medium text-black dark:text-white">
               Showing {filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1}–{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length} devices
             </p>
@@ -1150,7 +1272,12 @@ export function DevicesPage() {
       </div>
 
       {selectedDevice && (
-        <DeviceDrawer device={selectedDevice} onClose={() => setSelectedDevice(null)} />
+        <DeviceDrawer device={selectedDevice} onClose={() => setSelectedDevice(null)} onRefresh={async () => {
+          const managedDevices = await getDevices()
+          const refreshed = managedDevices.map(managedDeviceToDevice)
+          setAllDevices(refreshed)
+          setSelectedDevice(current => current ? refreshed.find(device => device.id === current.id) ?? current : null)
+        }} />
       )}
       {(osOpen || statusOpen || deptOpen) && (
         <div className="fixed inset-0 z-10" onClick={() => { setOsOpen(false); setStatusOpen(false); setDeptOpen(false) }} />

@@ -12,7 +12,7 @@ import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
 import { OSComplianceBarChart, FailingChecksPieChart, RiskHeatmap } from '@/components/ui/charts'
-import { Alert, SecurityCheck, PostureSummary, ManagedDevice, getAlerts, getSecurityChecks, getPostureSummary, getDevices } from '@/lib/api-client'
+import { Alert, SecurityCheck, ManagedDevice, getAlerts, getSecurityChecks, getDevices } from '@/lib/api-client'
 import { useDataMode } from '@/lib/data-mode-provider'
 
 function OSIcon({ os, className }: { os: string; className?: string }) {
@@ -65,16 +65,14 @@ function reportingStatus(lastCheckin: string | undefined, status: string) {
 export function OverviewPage() {
   const { mode } = useDataMode()
   const overviewDemoMode = mode === 'demo'
-  const [summary, setSummary] = useState<PostureSummary>({ total_devices: 0, active_devices: 0, compliant_count: 0, non_compliant: 0, error_count: 0 })
   const [liveDevices, setLiveDevices] = useState<ManagedDevice[]>([])
   const [liveAlerts, setLiveAlerts] = useState<Alert[]>([])
   const [liveChecks, setLiveChecks] = useState<SecurityCheck[]>([])
   useEffect(() => {
     if (overviewDemoMode) return
 
-    Promise.all([getPostureSummary(), getDevices(), getAlerts(), getSecurityChecks()])
-      .then(([nextSummary, nextDevices, nextAlerts, nextChecks]) => {
-        setSummary(nextSummary)
+    Promise.all([getDevices(), getAlerts(), getSecurityChecks()])
+      .then(([nextDevices, nextAlerts, nextChecks]) => {
         setLiveDevices(Array.isArray(nextDevices) ? nextDevices : [])
         setLiveAlerts(Array.isArray(nextAlerts) ? nextAlerts : [])
         setLiveChecks(Array.isArray(nextChecks) ? nextChecks : [])
@@ -83,6 +81,11 @@ export function OverviewPage() {
   }, [overviewDemoMode])
 
   const demoStats = getFleetStats()
+  const livePostureCounts = liveDevices.reduce((counts, device) => {
+    const posture = device.compliance_score >= 85 ? 'compliant' : device.compliance_score >= 65 ? 'warning' : 'critical'
+    counts[posture]++
+    return counts
+  }, { compliant: 0, warning: 0, critical: 0 })
   const displaySummary = overviewDemoMode
     ? {
         total_devices: demoDevices.length,
@@ -90,13 +93,20 @@ export function OverviewPage() {
         compliant_count: demoStats.compliant,
         non_compliant: demoStats.warning,
         error_count: demoStats.critical,
+        unknown_count: 0,
       }
-    : summary
+    : {
+        total_devices: liveDevices.length,
+        active_devices: liveDevices.filter(device => device.status === 'active').length,
+        compliant_count: livePostureCounts.compliant,
+        non_compliant: livePostureCounts.warning,
+        error_count: livePostureCounts.critical,
+        unknown_count: liveDevices.filter(device => !Number.isFinite(device.compliance_score)).length,
+      }
   const displayDevices = overviewDemoMode ? demoDevices.map(device => ({
     id: device.id,
     device_id: device.id,
     hostname: device.name,
-    assetType: device.assetType,
     health: device.status,
     complianceScore: device.complianceScore,
     os: device.os === 'Mac' ? 'macos' : device.os.toLowerCase() as ManagedDevice['os'],
@@ -106,7 +116,7 @@ export function OverviewPage() {
     status: device.status === 'compliant' ? 'active' : device.status === 'critical' ? 'error' : 'inactive' as ManagedDevice['status'],
     last_checkin: device.lastSeen,
     created_at: device.lastSeen,
-  })) : liveDevices.map(device => ({ ...device, assetType: 'unknown', health: 'unknown', complianceScore: undefined }))
+  })) : liveDevices.map(device => ({ ...device, health: 'unknown', complianceScore: undefined }))
   const displayAlerts = overviewDemoMode ? demoAlerts.map(alert => ({
     id: alert.id,
     title: alert.message,
@@ -128,14 +138,15 @@ export function OverviewPage() {
   })) : liveChecks
   const totalDevices = displaySummary.total_devices
   const activeDevices = displaySummary.active_devices
-  const devicesNeedingAttention = displaySummary.non_compliant
+  const devicesNeedingAttention = displaySummary.non_compliant + displaySummary.error_count
   const errors = displaySummary.error_count
+  const scoredLiveDevices = liveDevices.filter(device => (device.passed_checks ?? 0) + (device.failed_checks ?? 0) + (device.error_checks ?? 0) > 0)
   const stats = overviewDemoMode ? demoStats : {
-    avgScore: liveDevices.length ? Math.round(liveDevices.reduce((sum, device) => sum + (device.compliance_score ?? 0), 0) / liveDevices.length) : 0,
+    avgScore: scoredLiveDevices.length ? Math.round(scoredLiveDevices.reduce((sum, device) => sum + (device.compliance_score ?? 0), 0) / scoredLiveDevices.length) : 0,
     compliant: displaySummary.compliant_count,
     warning: displaySummary.non_compliant,
     critical: displaySummary.error_count,
-    needingAttention: displaySummary.non_compliant,
+    needingAttention: displaySummary.non_compliant + displaySummary.error_count,
     byOS: {
       Windows: { avg: 0 },
       Mac: { avg: 0 },
@@ -238,6 +249,7 @@ export function OverviewPage() {
                 { label: 'Healthy', count: displaySummary.compliant_count, color: 'bg-[var(--category-1)]' },
                 { label: 'Warning', count: displaySummary.non_compliant, color: 'bg-status-warning' },
                 { label: 'Critical', count: displaySummary.error_count, color: 'bg-status-critical' },
+                { label: 'No scan data', count: displaySummary.unknown_count, color: 'bg-muted-foreground/50' },
               ].map(item => (
                 <div key={item.label} className="min-w-0">
                   <div className="mb-1 flex items-center justify-between gap-2">
@@ -266,8 +278,8 @@ export function OverviewPage() {
             </span>
             <div className="flex w-[56%] min-w-0 flex-col gap-2.5 pt-0.5 text-[12px] font-medium text-black dark:text-white">
               {[
-                { label: 'Failed', count: devicesNeedingAttention, color: 'bg-status-warning', width: `${Math.max((devicesNeedingAttention / Math.max(devicesNeedingAttention + errors, 1)) * 100, 8)}%` },
-                { label: 'Errors', count: errors, color: 'bg-status-critical', width: `${Math.max((errors / Math.max(devicesNeedingAttention + errors, 1)) * 100, 8)}%` },
+                { label: 'Warning devices', count: displaySummary.non_compliant, color: 'bg-status-warning', width: `${Math.max((displaySummary.non_compliant / Math.max(devicesNeedingAttention, 1)) * 100, 8)}%` },
+                { label: 'Critical devices', count: errors, color: 'bg-status-critical', width: `${Math.max((errors / Math.max(devicesNeedingAttention, 1)) * 100, 8)}%` },
               ].map(item => (
                 <div key={item.label} className="min-w-0">
                   <div className="mb-1 flex items-center justify-between gap-2">
@@ -291,7 +303,7 @@ export function OverviewPage() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-2">
+      <div className="grid grid-cols-1 items-stretch gap-5 xl:grid-cols-[0.8fr_1.2fr]">
         {/* Category Health Row */}
         <div className="order-3 grid grid-cols-1 gap-4 xl:col-span-2 lg:grid-cols-3">
           <Link href="/active-directory" className="block group">
@@ -450,19 +462,17 @@ export function OverviewPage() {
       >
         <table className="w-full table-fixed text-[12px]">
           <colgroup>
-            <col className="w-[19%]" />
+            <col className="w-[23%]" />
+            <col className="w-[15%]" />
+            <col className="w-[17%]" />
+            <col className="w-[15%]" />
+            <col className="w-[17%]" />
             <col className="w-[13%]" />
-            <col className="w-[14%]" />
-            <col className="w-[15%]" />
-            <col className="w-[15%]" />
-            <col className="w-[12%]" />
-            <col className="w-[12%]" />
           </colgroup>
           <thead className="bg-[#F5F7FA] dark:bg-surface-elevated">
             <tr className="border-b border-border">
               {[
                 { label: 'Device', align: 'left' },
-                { label: 'Asset Type', align: 'left' },
                 { label: 'OS', align: 'left' },
                 { label: 'IP', align: 'left' },
                 { label: 'Health', align: 'left' },
@@ -485,11 +495,6 @@ export function OverviewPage() {
                   <span className="font-mono text-[12px] font-medium text-black dark:text-white">{d.hostname}</span>
                 </td>
                 <td className="px-3">
-                  <span className="text-[12px] font-medium text-black dark:text-white">
-                    {d.assetType === 'dc_server' ? 'DC Server' : d.assetType === 'laptop' ? 'Laptop' : d.assetType === 'workstation' ? 'Workstation' : 'Unknown'}
-                  </span>
-                </td>
-                 <td className="px-3">
                   <div className="flex items-center gap-2">
                     <OSIcon os={d.os === 'macos' ? 'Mac' : d.os.charAt(0).toUpperCase() + d.os.slice(1)} />
                     <span className="text-[12px] font-medium text-black dark:text-white">{d.os}</span>

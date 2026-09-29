@@ -16,10 +16,35 @@ export type Admin = {
   organization_id: string
   name: string
   email: string
+  phone?: string
   is_active: boolean
+  is_platform_admin?: boolean
   created_at: string
   last_login?: string
 }
+
+export type PlatformOrganization = {
+  id: string
+  name: string
+  description?: string
+  is_active: boolean
+  created_at: string
+  device_count: number
+  admin_count: number
+  alert_count: number
+}
+
+export type PlatformStats = {
+  total_orgs: number
+  active_orgs: number
+  inactive_orgs: number
+  total_devices: number
+  active_devices: number
+  total_alerts: number
+  health_summary: { compliant_devices: number; non_compliant_devices: number }
+}
+
+export type PlatformAdmin = Admin & { organization_name: string }
 
 type LoginResponse = {
   token: string
@@ -60,6 +85,7 @@ export type ManagedDevice = {
   compliance_score: number
   passed_checks: number
   failed_checks: number
+  error_checks?: number
   update_history?: Record<string, unknown>[]
   updates_automatic: boolean
   updates_pause_until?: string
@@ -80,6 +106,7 @@ export type PostureSummary = {
   compliant_count: number
   non_compliant: number
   error_count: number
+  unknown_count: number
 }
 
 export type SecurityCheck = {
@@ -104,6 +131,24 @@ export type DeviceCheck = {
   checked_at?: string
 }
 
+export type DeviceScanHistory = {
+  id: string
+  check_title: string
+  status: 'passed' | 'failed' | 'error'
+  details?: string
+  checked_at: string
+}
+
+export type DeviceCommandStatus = {
+  command_id: string
+  command: string
+  status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | ''
+  cancel_requested: boolean
+  result?: string
+  requested_at?: string
+  completed_at?: string
+}
+
 export type DeviceProtectionHistory = {
   id: string
   threat_name: string
@@ -111,6 +156,7 @@ export type DeviceProtectionHistory = {
   action: string
   severity: string
   detected_at: string
+  occurrences?: number
 }
 
 export type Alert = {
@@ -167,6 +213,64 @@ export async function login(input: { email: string; password: string }) {
   return result.data
 }
 
+export async function getPlatformStats() {
+  const result = await authenticatedRequest<ApiSuccess<PlatformStats>>('/platform/stats')
+  return result.data
+}
+
+export async function getPlatformOrgs() {
+  const result = await authenticatedRequest<ApiSuccess<PlatformOrganization[]>>('/platform/organizations')
+  return result.data
+}
+
+export async function createOrganization(input: { name: string; description?: string; admin_name: string; admin_email: string; admin_password: string; admin_phone: string }) {
+  const result = await authenticatedRequest<ApiSuccess<PlatformOrganization>>('/platform/organizations', { method: 'POST', body: JSON.stringify(input) })
+  return result.data
+}
+
+export async function getPlatformOrg(id: string) {
+  const result = await authenticatedRequest<ApiSuccess<PlatformOrganization>>(`/platform/organizations/${id}`)
+  return result.data
+}
+
+export async function updateOrganization(id: string, input: { name?: string; description?: string }) {
+  const result = await authenticatedRequest<ApiSuccess<PlatformOrganization>>(`/platform/organizations/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) })
+  return result.data
+}
+
+export async function deleteOrganization(id: string) {
+  await authenticatedRequest(`/platform/organizations/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
+export async function suspendOrganization(id: string) {
+  const result = await authenticatedRequest<ApiSuccess<PlatformOrganization>>(`/platform/organizations/${id}/suspend`, { method: 'POST' })
+  return result.data
+}
+
+export async function activateOrganization(id: string) {
+  const result = await authenticatedRequest<ApiSuccess<PlatformOrganization>>(`/platform/organizations/${id}/activate`, { method: 'POST' })
+  return result.data
+}
+
+export async function getPlatformAdmins() {
+  const result = await authenticatedRequest<ApiSuccess<PlatformAdmin[]>>('/platform/admins')
+  return result.data
+}
+
+export async function createOrganizationAdmin(id: string, input: { name: string; email: string; password: string; phone: string }) {
+  const result = await authenticatedRequest<ApiSuccess<Admin>>(`/platform/organizations/${id}/admins`, { method: 'POST', body: JSON.stringify(input) })
+  return result.data
+}
+
+export async function updatePlatformAdmin(id: string, input: { name?: string; email?: string; phone?: string; password?: string; is_active?: boolean }) {
+  const result = await authenticatedRequest<ApiSuccess<PlatformAdmin>>(`/platform/admins/${encodeURIComponent(id)}`, { method: 'PUT', body: JSON.stringify(input) })
+  return result.data
+}
+
+export async function deletePlatformAdmin(id: string) {
+  await authenticatedRequest(`/platform/admins/${encodeURIComponent(id)}`, { method: 'DELETE' })
+}
+
 function getStoredToken() {
   if (typeof window === 'undefined') return null
   return localStorage.getItem('fleet-api-token')
@@ -194,16 +298,62 @@ export async function getDeviceChecks(deviceId: string) {
   return result.data
 }
 
+export async function getDeviceScanHistory(deviceId: string) {
+  const result = await authenticatedRequest<ApiSuccess<DeviceScanHistory[]>>(`/devices/${deviceId}/scan-history`)
+  return result.data
+}
+
 export async function getDeviceProtectionHistory(deviceId: string) {
   const result = await authenticatedRequest<ApiSuccess<DeviceProtectionHistory[]>>(`/devices/${deviceId}/protection-history`)
   return result.data
 }
 
 export async function queueUpdateCommand(deviceId: string, command: string, pauseUntil?: string) {
-  const result = await authenticatedRequest<ApiSuccess<Record<string, never>>>(`/devices/${deviceId}/update-command`, {
+  const result = await authenticatedRequest<ApiSuccess<DeviceCommandStatus>>(`/devices/${deviceId}/update-command`, {
     method: 'POST',
     body: JSON.stringify({ command, pause_until: pauseUntil }),
   })
+  return result.data
+}
+
+export async function getDeviceCommandStatus(deviceId: string) {
+  const result = await authenticatedRequest<ApiSuccess<DeviceCommandStatus>>(`/devices/${encodeURIComponent(deviceId)}/command-status`)
+  return result.data
+}
+
+export async function cancelDeviceCommand(deviceId: string, commandId: string) {
+  await authenticatedRequest(`/devices/${encodeURIComponent(deviceId)}/update-command/${encodeURIComponent(commandId)}/cancel`, { method: 'POST' })
+}
+
+export async function waitForDeviceCommand(
+  deviceId: string,
+  commandId: string,
+  onStatus?: (status: DeviceCommandStatus) => void,
+  intervalMs = 2000,
+  timeoutMs = 10 * 60 * 1000,
+) {
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    await new Promise(resolve => window.setTimeout(resolve, intervalMs))
+    const status = await getDeviceCommandStatus(deviceId)
+    if (status.command_id !== commandId) continue
+    onStatus?.(status)
+    if (status.status === 'succeeded' || status.status === 'failed' || status.status === 'cancelled') return status
+  }
+  return null
+}
+
+export async function updateDevice(deviceId: string, input: { hostname?: string; os_version?: string; ip_address?: string; username?: string; status?: ManagedDevice['status'] }) {
+  const result = await authenticatedRequest<ApiSuccess<ManagedDevice>>(`/devices/${encodeURIComponent(deviceId)}`, { method: 'PUT', body: JSON.stringify(input) })
+  return result.data
+}
+
+export async function deleteDevice(deviceId: string) {
+  await authenticatedRequest(`/devices/${encodeURIComponent(deviceId)}`, { method: 'DELETE' })
+}
+
+export async function provisionDevice(input: { device_id: string; hostname: string; os: ManagedDevice['os']; os_version: string; ip_address?: string }) {
+  const result = await authenticatedRequest<ApiSuccess<{ device: ManagedDevice; agent_token: string }>>('/devices', { method: 'POST', body: JSON.stringify(input) })
   return result.data
 }
 
@@ -365,6 +515,7 @@ export type ApiKey = {
   is_active: boolean
   last_used?: string
   created_at: string
+  raw_key?: string
 }
 
 export type EnrollmentToken = {
@@ -473,7 +624,7 @@ export async function deleteEnrollmentToken(id: string) {
 }
 
 export async function enrollAgent(input: AgentEnrollmentRequest) {
-  const result = await authenticatedRequest<ApiSuccess<AgentEnrollmentResponse>>('/agent/enroll', {
+  const result = await request<ApiSuccess<AgentEnrollmentResponse>>('/agent/enroll', {
     method: 'POST',
     body: JSON.stringify(input),
   })

@@ -18,7 +18,7 @@ export function AuthGate({ children }: AuthGateProps) {
       <AuthShell>
         <div className="flex items-center justify-center gap-2 py-6 text-[13px] text-muted-foreground">
           <Loader2 size={15} className="animate-spin" />
-          Connecting to local service...
+          Loading...
         </div>
       </AuthShell>
     )
@@ -60,9 +60,6 @@ function AuthShell({ children }: { children: React.ReactNode }) {
         <div className="mt-6 rounded-md border border-border bg-card p-6 shadow-card">
           {children}
         </div>
-        <p className="mt-5 text-center text-[11px] text-muted-foreground">
-          Endpoint Security &amp; Fleet Compliance · Local instance
-        </p>
       </div>
     </main>
   )
@@ -96,7 +93,7 @@ function AuthForm({ mode }: { mode: 'setup' | 'login' }) {
     <form onSubmit={handleSubmit}>
       <h1 className="text-[17px] font-semibold text-foreground">{isSetup ? 'Set up your workspace' : 'Sign in'}</h1>
       <p className="mt-1.5 text-[12.5px] leading-snug text-muted-foreground">
-        {isSetup ? 'Create the administrator account for this local installation.' : 'Sign in with the administrator account for this local installation.'}
+        {isSetup ? 'Create the administrator account for this local installation.' : 'Sign in to continue.'}
       </p>
 
       <div className="mt-5 space-y-3.5">
@@ -136,7 +133,7 @@ function AuthForm({ mode }: { mode: 'setup' | 'login' }) {
         <p className="mt-4 text-[11.5px] text-muted-foreground">You'll sign in with these credentials right after setup.</p>
       )}
 
-      <Button type="submit" className="mt-5 w-full" disabled={submitting}>
+      <Button type="submit" variant={isSetup ? 'default' : 'success'} className="mt-5 w-full" disabled={submitting}>
         {submitting ? (
           <span className="inline-flex items-center gap-1.5"><Loader2 size={14} className="animate-spin" /> Please wait...</span>
         ) : isSetup ? 'Create administrator' : 'Sign in'}

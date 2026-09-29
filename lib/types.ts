@@ -50,6 +50,7 @@ export interface Device {
   status: DeviceStatus
   failedChecks: number
   passedChecks: number
+  errorChecks?: number
   lastSeen: string // ISO datetime
   lastScanned: string // ISO datetime
   malwareStatus: MalwareStatus

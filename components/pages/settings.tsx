@@ -304,6 +304,7 @@ export function SettingsPage() {
                             {key.key_prefix}•••••••• •••••
                             {key.expires_at ? ` • Expires ${new Date(key.expires_at).toLocaleDateString()}` : ' • No expiry'}
                           </p>
+                          {key.raw_key && <p className="mt-1 break-all font-mono text-[11px] text-status-warning">Copy now: {key.raw_key}</p>}
                         </div>
                         <button
                           type="button"
@@ -339,7 +340,7 @@ export function SettingsPage() {
                 <div>
                   <h3 className="text-[13px] font-semibold text-foreground mb-2">Enrollment Tokens</h3>
                   <p className="text-[12px] text-muted-foreground mb-3">
-                    One-time tokens used by endpoints to enroll into this fleet.
+                    One-time tokens used by the endpoint executable to enroll into this fleet. The executable prompts for this token and it cannot be reused.
                   </p>
                   {tokenError && <p className="text-[12px] text-status-critical mb-2">{tokenError}</p>}
                   <div className="space-y-2 mb-3">

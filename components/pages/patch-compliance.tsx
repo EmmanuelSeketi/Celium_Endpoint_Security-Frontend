@@ -13,7 +13,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 
 import { cn } from '@/lib/utils'
 import { CHART_GRID, STATUS_COLORS } from '@/lib/theme'
 import { useDataMode } from '@/lib/data-mode-provider'
-import { getDevices, getMissingPatches, getPatchStats, type ManagedDevice, type MissingPatch as MissingPatchApi } from '@/lib/api-client'
+import { getDevices, getMissingPatches, getPatchStats, queueUpdateCommand, waitForDeviceCommand, type ManagedDevice, type MissingPatch as MissingPatchApi } from '@/lib/api-client'
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number; payload: { fill: string } }[]; label?: string }) {
   if (!active || !payload?.length) return null
@@ -75,6 +75,10 @@ export function PatchCompliancePage() {
   const [deviceSearch, setDeviceSearch] = useState('')
   const [updateStateFilter, setUpdateStateFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [commandDevice, setCommandDevice] = useState<string | null>(null)
+  const [commandPhase, setCommandPhase] = useState<'queued' | 'running'>('queued')
+  const [commandError, setCommandError] = useState<string | null>(null)
+  const [pauseOverrides, setPauseOverrides] = useState<Record<string, string | null>>({})
   const pageSize = 8
 
   useEffect(() => {
@@ -209,6 +213,31 @@ export function PatchCompliancePage() {
     const current = platformDevices.filter(device => device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot).length
     return { os, total: platformDevices.length, current, pending: platformDevices.filter(device => device.patchStatus.pendingReboot).length }
   })
+
+  async function togglePause(device: Device) {
+    setCommandDevice(device.id)
+    setCommandPhase('queued')
+    setCommandError(null)
+    const pauseUntil = pauseOverrides[device.id] === undefined ? device.patchStatus.updatesPauseUntil : pauseOverrides[device.id]
+    const isPaused = Boolean(pauseUntil && new Date(pauseUntil).getTime() > Date.now())
+    const nextPauseUntil = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+    try {
+      if (mode !== 'demo') {
+        const queued = await queueUpdateCommand(device.id, isPaused ? 'resume' : 'pause', isPaused ? undefined : nextPauseUntil)
+        const outcome = await waitForDeviceCommand(device.id, queued.command_id, status => {
+          setCommandPhase(status.status === 'running' ? 'running' : 'queued')
+        }, 2000, 2 * 60 * 1000)
+        if (!outcome) throw new Error('Still waiting for the endpoint agent. Check that it is online.')
+        if (outcome.status === 'failed') throw new Error(outcome.result || 'The endpoint could not apply the update policy.')
+      }
+      setPauseOverrides(current => ({ ...current, [device.id]: isPaused ? null : nextPauseUntil }))
+      if (mode !== 'demo') setApiDevices(current => current.map(item => item.id === device.id ? { ...item, updates_pause_until: isPaused ? undefined : nextPauseUntil } : item))
+    } catch (error) {
+      setCommandError(error instanceof Error ? error.message : 'Unable to queue update policy command')
+    } finally {
+      setCommandDevice(null)
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -396,6 +425,7 @@ export function PatchCompliancePage() {
 
       {/* Device patch table */}
       <SectionCard title="Device update status" description="All managed devices sorted by update exposure.">
+        {commandError && <p className="mb-2 text-[12px] text-status-critical">{commandError}</p>}
         <div className="mb-3 flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1">
             <Search size={13} strokeWidth={1.5} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -457,7 +487,7 @@ export function PatchCompliancePage() {
                   <span className={cn('col-span-2 text-center text-[12px] font-medium', d.patchStatus.pendingReboot ? 'text-[#F79009]' : 'text-[#16A34A]')}>
                     {d.patchStatus.pendingReboot ? 'Required' : 'No'}
                   </span>
-                  <span className="col-span-2">
+                  <span className="col-span-2 flex flex-col items-start gap-1">
                     {(() => {
                       const state = getUpdateState(d)
                       const Icon = state.icon
@@ -471,6 +501,9 @@ export function PatchCompliancePage() {
                         </span>
                       )
                     })()}
+                    <button type="button" disabled={commandDevice === d.id} onClick={() => void togglePause(d)} className="text-[10px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
+                      {commandDevice === d.id ? commandPhase === 'running' ? 'Applying…' : 'Waiting for agent…' : (pauseOverrides[d.id] === undefined ? d.patchStatus.updatesPauseUntil : pauseOverrides[d.id]) && new Date((pauseOverrides[d.id] === undefined ? d.patchStatus.updatesPauseUntil : pauseOverrides[d.id]) as string).getTime() > Date.now() ? 'Resume updates' : 'Pause updates for 7 days'}
+                    </button>
                   </span>
                 </div>
               ))}
