@@ -367,14 +367,16 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
         setCancelRequested(false)
       }
       setCommandMessage('Command queued. Waiting for the endpoint agent to start…')
-      const executionTimeout = command === 'quick_scan'
+      const executionTimeout = command === 'install_updates'
+        ? 60 * 60 * 1000
+        : command === 'quick_scan'
         ? 2 * 60 * 60 * 1000
         : command === 'check_updates' || command === 'check'
         ? 30 * 60 * 1000
         : 10 * 60 * 1000
       const progressPollInterval = command === 'scan_checks' ? 500 : 2000
       const outcome = await waitForDeviceCommand(device.id, queued.command_id, status => {
-        const label = command === 'quick_scan' ? 'Quick malware scan' : command === 'scan_checks' ? 'Compliance checks' : command === 'check_updates' || command === 'check' ? 'Windows Update scan' : 'Update policy change'
+        const label = command === 'quick_scan' ? 'Quick malware scan' : command === 'scan_checks' ? 'Compliance checks' : command === 'check_updates' || command === 'check' ? 'Windows Update scan' : command === 'install_updates' ? 'Update installation' : 'Update policy change'
         const progress = status.result?.match(/^check_progress:([^:]+):(passed|failed|error)$/)
         if (progress) setCheckProgress(current => ({ ...current, [progress[1]]: progress[2] as 'passed' | 'failed' | 'error' }))
         setCommandMessage(status.status === 'running' ? `${label} running on endpoint…` : 'Command queued. Waiting for the endpoint agent to start…')
@@ -700,8 +702,8 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
-                          <button type="button" onClick={() => undefined} className="text-[12px] font-medium text-brand hover:underline">
-                            Download &amp; install
+                          <button type="button" disabled={updateAction === 'install_updates'} onClick={() => void sendUpdateCommand('install_updates')} className="text-[12px] font-medium text-brand hover:underline disabled:opacity-50">
+                            {updateAction === 'install_updates' ? 'Installing…' : 'Download and Install'}
                           </button>
                           <button type="button" onClick={() => setUpdateBannerOpen(false)} aria-label="Dismiss" className="text-black dark:text-white">
                             <X size={13} strokeWidth={2} />

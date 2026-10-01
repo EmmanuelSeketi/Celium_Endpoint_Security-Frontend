@@ -221,21 +221,22 @@ interface ChartDataItem {
 }
 
 interface FailingChecksPieChartProps {
-  data: Array<{ name: string; value: number }>
+  data: Array<{ name: string; value: number; color?: string }>
   height?: number
   showArcLabels?: boolean
   colors?: string[]
   showTotal?: boolean
   totalOverride?: number
+  showLegendBars?: boolean
 }
 
-export function FailingChecksPieChart({ data, height = 180, showArcLabels = true, colors, showTotal = false, totalOverride }: FailingChecksPieChartProps) {
+export function FailingChecksPieChart({ data, height = 180, showArcLabels = true, colors, showTotal = false, totalOverride, showLegendBars = true }: FailingChecksPieChartProps) {
   const defaultColors = [STATUS_COLORS.critical, STATUS_COLORS.warning, 'var(--category-1)', 'var(--category-2)', 'var(--category-3)']
   const pieColors = colors ?? defaultColors
   const chartData: ChartDataItem[] = [...data].sort((a, b) => b.value - a.value).map((item, index) => ({
     name: item.name,
     value: item.value,
-    color: pieColors[index % pieColors.length],
+    color: item.color ?? pieColors[index % pieColors.length],
   }))
   const total = chartData.reduce((sum, entry) => sum + entry.value, 0)
   const getArcLabel = (params: DefaultizedPieValueType) => {
@@ -298,12 +299,14 @@ export function FailingChecksPieChart({ data, height = 180, showArcLabels = true
                 </span>
                 <span className="shrink-0 font-mono text-[12px] font-medium text-black dark:text-white">{entry.value}</span>
               </div>
-              <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
-                <div
-                  className="h-full rounded-full transition-all"
-                  style={{ width, backgroundColor: entry.color }}
-                />
-              </div>
+              {showLegendBars && (
+                <div className="h-2 w-full overflow-hidden rounded-full bg-muted/40">
+                  <div
+                    className="h-full rounded-full transition-all"
+                    style={{ width, backgroundColor: entry.color }}
+                  />
+                </div>
+              )}
             </div>
           )
         })}
