@@ -1,13 +1,16 @@
 'use client'
 
-import { useState } from 'react'
-import { formatDistanceToNow } from 'date-fns'
-import { FileText, Download, Plus, RefreshCw, FileSpreadsheet, ChevronRight, CheckCircle2 } from 'lucide-react'
-import { reports, devices, complianceChecks } from '@/lib/mock-data'
+import { useEffect, useMemo, useState } from 'react'
+import { format } from 'date-fns'
+import { AlertTriangle, ArrowDownToLine, FileText, Plus, RefreshCw, FileSpreadsheet, ShieldCheck } from 'lucide-react'
+import { devices, complianceChecks, adDomainStatus, detections } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
-import type { ReportTemplate } from '@/lib/types'
+import type { Device, ReportTemplate, Severity } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { useDataMode } from '@/lib/data-mode-provider'
+import { getADDomainStatus, getDevices, getMalwareDetections, getSecurityChecks, type ADDomainStatus, type ManagedDevice, type MalwareDetection } from '@/lib/api-client'
 
 const TYPE_COLORS: Record<ReportTemplate['type'], string> = {
   'Executive Summary': '#5B7FFF',
@@ -24,6 +27,79 @@ const REPORT_TYPES: ReportTemplate['type'][] = [
   'Malware Summary',
   'OS Updates',
 ]
+
+type ReportCheck = { name: string; category: string; failingDeviceCount: number; severity?: Severity }
+type ReportDetection = Pick<MalwareDetection, 'device_name' | 'threat_name' | 'action' | 'severity' | 'timestamp'>
+type ReportDevice = Pick<Device, 'name' | 'os' | 'osVersion'> & {
+  complianceScore: number | null
+  status: Device['status'] | 'unknown'
+  failedChecks: number | null
+  malwareStatus: {
+    definitionAge: number | null
+    realtimeProtection: boolean | null
+    tamperProtection: boolean | null
+    lastScanResult: Device['malwareStatus']['lastScanResult'] | null
+    quarantineCount: number | null
+  }
+  patchStatus: {
+    missingCritical: number | null
+    missingTotal: number | null
+    pendingReboot: boolean | null
+    lastUpdateCheck: string | null
+    osEol: boolean | null
+    eolDate?: string
+  }
+}
+type ReportSnapshot = {
+  devices: ReportDevice[]
+  checks: ReportCheck[]
+  detections?: ReportDetection[]
+  adStatus?: ADDomainStatus
+}
+type ReportSection = { heading: string; lines: string[] }
+type ReportFinding = { title: string; detail: string; count: number; severity?: Severity }
+
+const DEMO_REPORT_SNAPSHOT: ReportSnapshot = {
+  devices,
+  checks: complianceChecks,
+  detections: detections.map(detection => ({
+    device_name: detection.deviceName,
+    threat_name: detection.threatName,
+    action: detection.action,
+    severity: detection.severity,
+    timestamp: detection.timestamp,
+  })),
+  adStatus: adDomainStatus,
+}
+
+function mapManagedDevice(device: ManagedDevice): ReportDevice {
+  const score = Number.isFinite(device.compliance_score) ? device.compliance_score : null
+  const malware = device.malware
+  const patch = device.patch_status
+  return {
+    name: device.hostname,
+    os: device.os === 'windows' ? 'Windows' : device.os === 'macos' ? 'Mac' : 'Linux',
+    osVersion: device.os_version,
+    complianceScore: score,
+    status: score === null ? 'unknown' : score >= 85 ? 'compliant' : score >= 65 ? 'warning' : 'critical',
+    failedChecks: Number.isFinite(device.failed_checks) ? device.failed_checks : null,
+    malwareStatus: {
+      definitionAge: typeof malware?.definition_age === 'number' && Number.isFinite(malware.definition_age) ? malware.definition_age : null,
+      realtimeProtection: typeof malware?.realtime_protection === 'boolean' ? malware.realtime_protection : null,
+      lastScanResult: malware?.last_scan_result ?? null,
+      tamperProtection: typeof malware?.tamper_protection === 'boolean' ? malware.tamper_protection : null,
+      quarantineCount: typeof malware?.quarantine_count === 'number' && Number.isFinite(malware.quarantine_count) ? malware.quarantine_count : null,
+    },
+    patchStatus: {
+      missingCritical: typeof patch?.missing_critical === 'number' && Number.isFinite(patch.missing_critical) ? patch.missing_critical : null,
+      missingTotal: typeof patch?.missing_total === 'number' && Number.isFinite(patch.missing_total) ? patch.missing_total : null,
+      pendingReboot: typeof patch?.pending_reboot === 'boolean' ? patch.pending_reboot : null,
+      lastUpdateCheck: patch?.last_update_check ?? null,
+      osEol: typeof patch?.os_eol === 'boolean' ? patch.os_eol : null,
+      eolDate: patch?.eol_date,
+    },
+  }
+}
 
 const CRC_TABLE = (() => {
   const table = new Uint32Array(256)
@@ -54,24 +130,72 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;')
 }
 
+function formatReportDate(value: string | undefined, pattern: string) {
+  if (!value) return 'not reported'
+  const date = new Date(value)
+  return Number.isFinite(date.getTime()) ? format(date, pattern) : 'not reported'
+}
+
 function buildPdfBlob(title: string, lines: string[]): Blob {
   const pageWidth = 595.28
   const pageHeight = 841.89
-  const content = lines
-    .map((line, index) => {
-      const y = pageHeight - 72 - index * 18
-      return `BT /F1 11 Tf 50 ${y.toFixed(2)} Td (${line.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')}) Tj ET`
-    })
-    .join('\n')
+  const safePdfText = (value: string) => value
+    .replace(/[^\x20-\x7E]/g, '-')
+    .replace(/\\/g, '\\\\')
+    .replace(/\(/g, '\\(')
+    .replace(/\)/g, '\\)')
+  const wrappedLines = lines.flatMap(line => {
+    const isHeading = line.startsWith('## ')
+    const text = line.replace(/^## /, '')
+    const width = isHeading ? 70 : 92
+    const words = text.split(/\s+/)
+    const output: string[] = []
+    let current = ''
+    for (const word of words) {
+      if (current && `${current} ${word}`.length > width) {
+        output.push(`${isHeading ? '## ' : ''}${current}`)
+        current = word
+      } else {
+        current = current ? `${current} ${word}` : word
+      }
+    }
+    if (current) output.push(`${isHeading ? '## ' : ''}${current}`)
+    return output
+  })
+  const pageLines: string[][] = []
+  for (let index = 0; index < wrappedLines.length; index += 40) {
+    pageLines.push(wrappedLines.slice(index, index + 40))
+  }
+  if (pageLines.length === 0) pageLines.push([])
 
-  const pdfContent = `BT /F1 16 Tf 50 780 Td (${title.replace(/\\/g, '\\\\').replace(/\(/g, '\\(').replace(/\)/g, '\\)')}) Tj ET\n${content}`
   const objects: string[] = [
     '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>`,
+    '',
     '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
-    `<< /Length ${pdfContent.length} >>\nstream\n${pdfContent}\nendstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>',
   ]
+  const pageIds: number[] = []
+  pageLines.forEach((page, pageIndex) => {
+    const pageId = objects.length + 1
+    const contentId = pageId + 1
+    pageIds.push(pageId)
+    const content = [
+      `BT /F2 16 Tf 50 785 Td (${safePdfText(title)}) Tj ET`,
+      `BT /F1 9 Tf 50 765 Td (Fleet Compliance - Current inventory snapshot) Tj ET`,
+      ...page.flatMap((line, index) => {
+        const heading = line.startsWith('## ')
+        const y = 735 - index * 17
+        const text = line.replace(/^## /, '')
+        return [`BT /${heading ? 'F2' : 'F1'} ${heading ? 12 : 10} Tf 50 ${y.toFixed(2)} Td (${safePdfText(text)}) Tj ET`]
+      }),
+      `BT /F1 9 Tf 500 28 Td (Page ${pageIndex + 1} of ${pageLines.length}) Tj ET`,
+    ].join('\n')
+    objects.push(
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 3 0 R /F2 4 0 R >> >> /Contents ${contentId} 0 R >>`,
+      `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    )
+  })
+  objects[1] = `<< /Type /Pages /Kids [${pageIds.map(id => `${id} 0 R`).join(' ')}] /Count ${pageIds.length} >>`
 
   let pdf = '%PDF-1.4\n'
   const offsets: number[] = [0]
@@ -92,8 +216,9 @@ function buildPdfBlob(title: string, lines: string[]): Blob {
 function buildDocxBlob(title: string, lines: string[]): Blob {
   const paragraphs = lines
     .map(line => {
-      const safeLine = escapeXml(line)
-      return `<w:p><w:r><w:t xml:space="preserve">${safeLine}</w:t></w:r></w:p>`
+      const heading = line.startsWith('## ')
+      const safeLine = escapeXml(line.replace(/^## /, ''))
+      return `<w:p>${heading ? '<w:pPr><w:pStyle w:val="Heading2"/></w:pPr>' : ''}<w:r><w:t xml:space="preserve">${safeLine}</w:t></w:r></w:p>`
     })
     .join('')
 
@@ -221,91 +346,231 @@ function buildDocxBlob(title: string, lines: string[]): Blob {
   return new Blob([new Uint8Array(output)], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' })
 }
 
-function formatReportContent(type: ReportTemplate['type'], title: string): { title: string; lines: string[] } {
-  const scoring = devices.reduce((acc, device) => {
-    acc.total += 1
-    acc.compliant += device.status === 'compliant' ? 1 : 0
-    acc.warning += device.status === 'warning' ? 1 : 0
-    acc.critical += device.status === 'critical' ? 1 : 0
-    acc.score += device.complianceScore
-    return acc
-  }, { total: 0, compliant: 0, warning: 0, critical: 0, score: 0 })
-
-  const avgCompliance = Math.round(scoring.score / Math.max(scoring.total, 1))
-  const failedChecks = complianceChecks.filter(check => check.failingDeviceCount > 0).length
+function getReportSections(type: ReportTemplate['type'], snapshot: ReportSnapshot): ReportSection[] {
+  const total = snapshot.devices.length
+  const scoredDevices = snapshot.devices.filter(device => device.complianceScore !== null)
+  const averageScore = scoredDevices.length
+    ? Math.round(scoredDevices.reduce((sum, device) => sum + (device.complianceScore ?? 0), 0) / scoredDevices.length)
+    : 0
+  const compliant = snapshot.devices.filter(device => device.status === 'compliant').length
+  const warning = snapshot.devices.filter(device => device.status === 'warning').length
+  const critical = snapshot.devices.filter(device => device.status === 'critical').length
+  const unknownPosture = snapshot.devices.filter(device => device.status === 'unknown').length
+  const failingChecks = snapshot.checks.filter(check => check.failingDeviceCount > 0)
+  const criticalUpdateReported = snapshot.devices.filter(device => device.patchStatus.missingCritical !== null).length
+  const criticalUpdateDevices = snapshot.devices.filter(device => (device.patchStatus.missingCritical ?? 0) > 0).length
+  const restartReported = snapshot.devices.filter(device => device.patchStatus.pendingReboot !== null).length
+  const restartRequired = snapshot.devices.filter(device => device.patchStatus.pendingReboot === true).length
+  const osSupportReported = snapshot.devices.filter(device => device.patchStatus.osEol !== null).length
+  const endOfSupport = snapshot.devices.filter(device => device.patchStatus.osEol === true).length
+  const realtimeReported = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection !== null).length
+  const realtimeDisabled = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection === false).length
+  const categoryLabels: Record<string, string> = {
+    active_directory: 'Active Directory',
+    malware_protection: 'Malware protection',
+    os_updates: 'OS updates',
+    other: 'Other controls',
+  }
+  const topChecks = [...failingChecks].sort((a, b) => b.failingDeviceCount - a.failingDeviceCount).slice(0, 10)
+  const updateRiskDevices = [...snapshot.devices]
+    .filter(device => device.patchStatus.osEol === true || (device.patchStatus.missingCritical ?? 0) > 0 || device.patchStatus.pendingReboot === true || (device.patchStatus.missingTotal ?? 0) > 0)
+    .sort((a, b) => Number(b.patchStatus.osEol === true) - Number(a.patchStatus.osEol === true) || (b.patchStatus.missingCritical ?? 0) - (a.patchStatus.missingCritical ?? 0) || (a.complianceScore ?? 101) - (b.complianceScore ?? 101))
+  const protectionRiskDevices = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection === false || device.malwareStatus.tamperProtection === false || (device.malwareStatus.definitionAge ?? 0) > 3)
+  const atRiskDevices = [...snapshot.devices]
+    .filter(device => updateRiskDevices.includes(device) || protectionRiskDevices.includes(device))
+    .sort((a, b) => Number(b.patchStatus.osEol === true) - Number(a.patchStatus.osEol === true) || (b.patchStatus.missingCritical ?? 0) - (a.patchStatus.missingCritical ?? 0) || (a.complianceScore ?? 101) - (b.complianceScore ?? 101))
+    .slice(0, 10)
 
   if (type === 'Executive Summary') {
-    return {
-      title,
-      lines: [
-        `Fleet: ${devices.length} managed endpoints`,
-        `Average compliance score: ${avgCompliance}%`,
-        `Compliant devices: ${scoring.compliant} | Warning: ${scoring.warning} | Critical: ${scoring.critical}`,
-        `Failed policy checks tracked: ${failedChecks}`,
-        'Most at-risk endpoint: SF-WKS-0104 (critical remediation required)',
-        'Action recommended: patch 14 outstanding Windows devices before next maintenance window.',
-      ],
-    }
+    return [
+      { heading: 'Fleet posture', lines: [
+        `Managed endpoints: ${total}`,
+        `Average compliance score: ${scoredDevices.length ? `${averageScore}% across ${scoredDevices.length} endpoints` : 'not reported'}`,
+        `Posture distribution: ${compliant} compliant, ${warning} warning, ${critical} critical, ${unknownPosture} not reported`,
+        `Controls with reported failures: ${failingChecks.length} of ${snapshot.checks.length}`,
+      ] },
+      { heading: 'Key exposure indicators', lines: [
+        `Endpoints with critical or important updates missing: ${criticalUpdateDevices} of ${criticalUpdateReported} reporting`,
+        `Endpoints awaiting restart: ${restartRequired} of ${restartReported} reporting`,
+        `Endpoints running an end-of-support OS: ${endOfSupport} of ${osSupportReported} reporting`,
+        `Endpoints with real-time protection disabled: ${realtimeDisabled} of ${realtimeReported} reporting`,
+      ] },
+      { heading: 'Priority endpoints', lines: atRiskDevices.length
+        ? atRiskDevices.map(device => {
+          const reasons = [
+            device.patchStatus.osEol === true ? 'end-of-support OS' : '',
+            (device.patchStatus.missingCritical ?? 0) > 0 ? `${device.patchStatus.missingCritical} critical updates missing` : '',
+            device.patchStatus.pendingReboot === true ? 'restart pending' : '',
+            device.malwareStatus.realtimeProtection === false ? 'real-time protection disabled' : '',
+            device.malwareStatus.tamperProtection === false ? 'tamper protection disabled' : '',
+          ].filter(Boolean)
+          return `${device.name} | score ${device.complianceScore === null ? 'not reported' : `${device.complianceScore}%`} | ${reasons.join(', ')}`
+        })
+        : ['No endpoints are currently flagged by the available update and protection indicators.'] },
+      { heading: 'Recommended next steps', lines: [
+        'Remediate end-of-support operating systems and critical update gaps first.',
+        'Review controls with the highest failing-device counts and assign owners for follow-up.',
+        'Confirm endpoint protection is enabled and investigate any active threat detections.',
+      ] },
+    ]
   }
 
   if (type === 'Compliance Detail') {
-    const topFailures = [...complianceChecks]
-      .sort((a, b) => b.failingDeviceCount - a.failingDeviceCount)
-      .slice(0, 5)
-      .map(check => `${check.name}: ${check.failingDeviceCount} failing devices`)
-
-    return {
-      title,
-      lines: [
-        'Detailed compliance tracking by control family',
-        ...topFailures,
-        'The most severe gaps remain in patch compliance, real-time protection, and privileged AD membership.',
-        'Recommended next review: validate critical updates and remove stale privileged accounts.',
-      ],
-    }
+    return [
+      { heading: 'Assessment scope', lines: [
+        `Managed endpoints assessed: ${total}`,
+        `Checks available: ${snapshot.checks.length}`,
+        `Checks reporting at least one failure: ${failingChecks.length}`,
+        `Reported failed-device instances across checks: ${failingChecks.reduce((sum, check) => sum + check.failingDeviceCount, 0)} (a device may appear in more than one check)`,
+      ] },
+      { heading: 'Highest-impact failing controls', lines: topChecks.length
+        ? topChecks.map((check, index) => `${index + 1}. ${check.name} | ${categoryLabels[check.category] ?? check.category} | ${check.failingDeviceCount} failing devices`)
+        : ['No failing controls were reported in the current snapshot.'] },
+      { heading: 'Endpoint posture', lines: [
+        `Compliant: ${compliant} (${total ? Math.round(compliant / total * 100) : 0}%)`,
+        `Warning: ${warning} (${total ? Math.round(warning / total * 100) : 0}%)`,
+        `Critical: ${critical} (${total ? Math.round(critical / total * 100) : 0}%)`,
+        `Compliance score not reported: ${total - scoredDevices.length}`,
+        ...atRiskDevices.map(device => `${device.name} | ${device.failedChecks === null ? 'failed checks not reported' : `${device.failedChecks} failed checks`} | compliance score ${device.complianceScore === null ? 'not reported' : `${device.complianceScore}%`}`),
+      ] },
+    ]
   }
 
   if (type === 'AD Security') {
-    return {
-      title,
-      lines: [
-        'Active Directory health snapshot',
-        'Privileged group review: 2 accounts require cleanup',
-        'Inactive computer accounts older than 90 days: 4 identified',
-        'Password never expires violations: 9 accounts flagged',
-        'Recommended action: remove stale accounts and reduce Domain Admin exposure to approved users only.',
-      ],
-    }
+    const ad = snapshot.adStatus
+    if (!ad) return [{ heading: 'Data availability', lines: ['Active Directory security data was not available for this report. No AD findings have been inferred.'] }]
+    const unhealthyControllers = ad.domain_controllers.filter(controller => !controller.online || !controller.replication_healthy)
+    return [
+      { heading: 'Directory overview', lines: [
+        `Domain controllers reported: ${ad.domain_controllers.length}`,
+        `Controllers offline or with unhealthy replication: ${unhealthyControllers.length}`,
+        `Stale accounts reported: ${ad.stale_accounts}`,
+        `Failed logons in the last 24 hours: ${ad.failed_logons_24h}`,
+        `Successful logons in the last 24 hours: ${ad.successful_logons_24h}`,
+        `Kerberos anomalies reported: ${ad.kerberos_anomalies.length}`,
+      ] },
+      { heading: 'Domain controller health', lines: ad.domain_controllers.length
+        ? ad.domain_controllers.map(controller => `${controller.name} | ${controller.online ? 'online' : 'offline'} | replication ${controller.replication_healthy ? 'healthy' : 'unhealthy'} | last replication ${formatReportDate(controller.last_replication, 'MMM d, yyyy HH:mm')}`)
+        : ['No domain controllers were reported.'] },
+      { heading: 'Stale accounts requiring review', lines: ad.stale_account_records.length
+        ? ad.stale_account_records.filter(account => account.stale).slice(0, 10).map(account => `${account.account_name} | ${account.account_type} | last logon ${formatReportDate(account.last_logon, 'MMM d, yyyy')} | password never expires: ${account.password_never_expires ? 'yes' : 'no'}`)
+        : ['No stale account records were returned.'] },
+      { heading: 'Recent privilege and Kerberos events', lines: [
+        ...ad.privileged_group_changes.slice(0, 8).map(change => `${change.action} ${change.account} in ${change.group_name} | ${formatReportDate(change.timestamp, 'MMM d, yyyy HH:mm')}`),
+        ...ad.kerberos_anomalies.slice(0, 8).map(anomaly => `${anomaly.severity.toUpperCase()} ${anomaly.type} | account ${anomaly.account} | ${formatReportDate(anomaly.timestamp, 'MMM d, yyyy HH:mm')}`),
+        ...(!ad.privileged_group_changes.length && !ad.kerberos_anomalies.length ? ['No privilege changes or Kerberos anomalies were reported.'] : []),
+      ] },
+    ]
   }
 
   if (type === 'Malware Summary') {
-    return {
-      title,
-      lines: [
-        'Malware and endpoint protection summary',
-        'Real-time protection disabled on 3 devices',
-        'Threats detected in last 30 days: 5 endpoints',
-        'Definition age above policy threshold on 7 devices',
-        'Tamper protection disabled on 4 devices; enforce endpoint security policy urgently.',
-      ],
-    }
+    const detectionsAvailable = snapshot.detections !== undefined
+    const detectionRows = snapshot.detections ?? []
+    const realtimeCoverage = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection !== null).length
+    const tamperCoverage = snapshot.devices.filter(device => device.malwareStatus.tamperProtection !== null).length
+    const definitionCoverage = snapshot.devices.filter(device => device.malwareStatus.definitionAge !== null).length
+    const quarantineCoverage = snapshot.devices.filter(device => device.malwareStatus.quarantineCount !== null).length
+    const protectionGaps = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection === false || device.malwareStatus.tamperProtection === false || (device.malwareStatus.definitionAge ?? 0) > 3)
+      .sort((a, b) => Number(b.malwareStatus.realtimeProtection === false) - Number(a.malwareStatus.realtimeProtection === false) || (b.malwareStatus.definitionAge ?? -1) - (a.malwareStatus.definitionAge ?? -1))
+      .slice(0, 10)
+    return [
+      { heading: 'Protection coverage', lines: [
+        `Endpoints assessed: ${total}`,
+        `Real-time protection enabled: ${snapshot.devices.filter(device => device.malwareStatus.realtimeProtection === true).length}; disabled: ${snapshot.devices.filter(device => device.malwareStatus.realtimeProtection === false).length}; status not reported: ${total - realtimeCoverage}`,
+        `Tamper protection enabled: ${snapshot.devices.filter(device => device.malwareStatus.tamperProtection === true).length}; disabled: ${snapshot.devices.filter(device => device.malwareStatus.tamperProtection === false).length}; status not reported: ${total - tamperCoverage}`,
+        `Definition age greater than 3 days: ${snapshot.devices.filter(device => (device.malwareStatus.definitionAge ?? 0) > 3).length}; age not reported: ${total - definitionCoverage}`,
+        `Quarantined items reported: ${snapshot.devices.reduce((sum, device) => sum + (device.malwareStatus.quarantineCount ?? 0), 0)} across ${quarantineCoverage} endpoints; not reported: ${total - quarantineCoverage}`,
+        `Detection records available: ${detectionsAvailable ? detectionRows.length : 'not available'}`,
+      ] },
+      { heading: 'Endpoints requiring protection review', lines: protectionGaps.length
+        ? protectionGaps.map(device => `${device.name} | real-time ${device.malwareStatus.realtimeProtection === null ? 'not reported' : device.malwareStatus.realtimeProtection ? 'on' : 'off'} | tamper ${device.malwareStatus.tamperProtection === null ? 'not reported' : device.malwareStatus.tamperProtection ? 'on' : 'off'} | definitions ${device.malwareStatus.definitionAge === null ? 'not reported' : `${device.malwareStatus.definitionAge} days old`}`)
+        : ['No protection gaps were identified in the available endpoint data.'] },
+      { heading: 'Detection activity', lines: detectionsAvailable
+        ? detectionRows.slice(0, 12).map(detection => `${detection.severity.toUpperCase()} ${detection.threat_name} | ${detection.device_name} | action ${detection.action} | ${formatReportDate(detection.timestamp, 'MMM d, yyyy HH:mm')}`)
+        : ['Detection history was not available. Endpoint protection posture is still included above.'] },
+    ]
   }
 
-  return {
-    title,
-    lines: [
-      'Patch and operating system compliance summary',
-      'Critical patches missing: 8 devices',
-      'Pending reboot after patching: 6 devices',
-      'End-of-life operating systems detected: 2 devices',
-      'Action required: complete updates and plan replacement or upgrade before vendor support ends.',
-    ],
-  }
+  return [
+    { heading: 'Update posture', lines: [
+      `Endpoints assessed: ${total}`,
+      `Endpoints with critical or important updates missing: ${criticalUpdateDevices} of ${criticalUpdateReported} reporting`,
+      `Total missing updates reported: ${snapshot.devices.reduce((sum, device) => sum + (device.patchStatus.missingTotal ?? 0), 0)} across ${snapshot.devices.filter(device => device.patchStatus.missingTotal !== null).length} endpoints`,
+      `Endpoints awaiting restart: ${restartRequired} of ${restartReported} reporting`,
+      `Endpoints running end-of-support operating systems: ${endOfSupport} of ${osSupportReported} reporting`,
+    ] },
+    { heading: 'Devices requiring update remediation', lines: atRiskDevices.length
+      ? updateRiskDevices.map(device => `${device.name} | ${device.os} ${device.osVersion} | ${device.patchStatus.missingCritical === null ? 'critical updates not reported' : `${device.patchStatus.missingCritical} critical / important missing`} | ${device.patchStatus.missingTotal === null ? 'total missing not reported' : `${device.patchStatus.missingTotal} total missing`} | restart ${device.patchStatus.pendingReboot === null ? 'not reported' : device.patchStatus.pendingReboot ? 'required' : 'not required'} | OS support ${device.patchStatus.osEol === null ? 'not reported' : device.patchStatus.osEol ? 'ended' : 'supported'}`)
+      : ['No update or operating-system lifecycle risks were reported.'] },
+    { heading: 'Recommended next steps', lines: [
+      'Deploy critical and important updates to affected endpoints, then validate scan results.',
+      'Complete pending restarts during approved maintenance windows.',
+      'Prioritize OS upgrades or replacements for endpoints outside vendor support.',
+    ] },
+  ]
 }
 
-function buildReportBlob(report: ReportTemplate): Blob {
-  const { title, lines } = formatReportContent(report.type, report.name)
-  return report.format === 'PDF' ? buildPdfBlob(title, lines) : buildDocxBlob(title, lines)
+function buildReportBlob(report: ReportTemplate, snapshot: ReportSnapshot): Blob {
+  const sections = getReportSections(report.type, snapshot)
+  const lines = [
+    `Generated: ${format(new Date(), 'MMM d, yyyy HH:mm')}`,
+    'Coverage: current inventory snapshot; findings reflect the data available at generation time.',
+    '',
+    ...sections.flatMap(section => [`## ${section.heading}`, ...section.lines, '']),
+  ]
+  return report.format === 'PDF' ? buildPdfBlob(report.name, lines) : buildDocxBlob(report.name, lines)
+}
+
+function getReportFindings(snapshot: ReportSnapshot): ReportFinding[] {
+  const topCheck = [...snapshot.checks].sort((a, b) => b.failingDeviceCount - a.failingDeviceCount)[0]
+  const criticalUpdateReported = snapshot.devices.filter(device => device.patchStatus.missingCritical !== null || device.patchStatus.missingTotal !== null || device.patchStatus.pendingReboot !== null || device.patchStatus.osEol !== null).length
+  const criticalUpdateDevices = snapshot.devices.filter(device => (device.patchStatus.missingCritical ?? 0) > 0 || device.patchStatus.osEol === true).length
+  const protectionCoverage = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection !== null && device.malwareStatus.tamperProtection !== null).length
+  const protectionGaps = snapshot.devices.filter(device => device.malwareStatus.realtimeProtection === false || device.malwareStatus.tamperProtection === false).length
+  const findings: ReportFinding[] = []
+  if (topCheck && topCheck.failingDeviceCount > 0) findings.push({
+    title: 'Highest-impact control',
+    detail: `${topCheck.name} is failing on ${topCheck.failingDeviceCount} devices.`,
+    count: topCheck.failingDeviceCount,
+    severity: topCheck.severity,
+  })
+  findings.push({
+    title: 'Critical update exposure',
+    detail: `${criticalUpdateDevices} of ${criticalUpdateReported} endpoints with update data report missing critical updates or end-of-support operating systems.`,
+    count: criticalUpdateDevices,
+    severity: criticalUpdateDevices ? 'critical' : criticalUpdateReported === snapshot.devices.length ? 'info' : undefined,
+  })
+  findings.push({
+    title: 'Endpoint protection gaps',
+    detail: `${protectionGaps} endpoints have a reported protection gap; protection status is available for ${protectionCoverage} of ${snapshot.devices.length}.`,
+    count: protectionGaps,
+    severity: protectionGaps ? 'critical' : protectionCoverage === snapshot.devices.length ? 'info' : undefined,
+  })
+  if (snapshot.adStatus) {
+    const directoryRisks = snapshot.adStatus.stale_accounts + snapshot.adStatus.kerberos_anomalies.length
+    const hasCriticalKerberosAnomaly = snapshot.adStatus.kerberos_anomalies.some(anomaly => anomaly.severity === 'critical')
+    findings.push({
+      title: 'Directory risk signals',
+      detail: `${snapshot.adStatus.stale_accounts} stale accounts and ${snapshot.adStatus.kerberos_anomalies.length} Kerberos anomalies are reported; count represents signals, not unique identities.`,
+      count: directoryRisks,
+      severity: hasCriticalKerberosAnomaly ? 'critical' : directoryRisks ? 'warning' : 'info',
+    })
+  }
+  return findings
+}
+
+function getReportMetrics(snapshot: ReportSnapshot) {
+  const total = snapshot.devices.length
+  const scoredDevices = snapshot.devices.filter(device => device.complianceScore !== null)
+  const updateReported = snapshot.devices.filter(device => device.patchStatus.missingCritical !== null || device.patchStatus.missingTotal !== null || device.patchStatus.pendingReboot !== null || device.patchStatus.osEol !== null).length
+  return {
+    endpoints: total,
+    averageScore: scoredDevices.length ? Math.round(scoredDevices.reduce((sum, device) => sum + (device.complianceScore ?? 0), 0) / scoredDevices.length) : 0,
+    scoreCoverage: scoredDevices.length,
+    failingControls: snapshot.checks.filter(check => check.failingDeviceCount > 0).length,
+    updateRisk: snapshot.devices.filter(device => (device.patchStatus.missingCritical ?? 0) > 0 || device.patchStatus.osEol === true).length,
+    updateCoverage: updateReported,
+  }
 }
 
 function downloadBlob(blob: Blob, fileName: string) {
@@ -326,8 +591,24 @@ function FormatIcon({ format }: { format: ReportTemplate['format'] }) {
   return <FileSpreadsheet size={14} strokeWidth={1.5} className="text-[#008080] shrink-0" />
 }
 
-function GenerateModal({ onClose }: { onClose: () => void }) {
-  const [type, setType] = useState<ReportTemplate['type']>('Executive Summary')
+const REPORT_DESCRIPTIONS: Record<ReportTemplate['type'], string> = {
+  'Executive Summary': 'Fleet-wide health, exposure indicators, prioritized endpoints, and recommended next steps.',
+  'Compliance Detail': 'Control coverage, highest-impact failures, and endpoint posture with measured counts.',
+  'AD Security': 'Directory controller health, stale accounts, privilege changes, and Kerberos anomalies.',
+  'Malware Summary': 'Protection coverage, definition age, quarantine totals, and available detection activity.',
+  'OS Updates': 'Missing updates, reboot requirements, end-of-support systems, and affected endpoints.',
+}
+
+function GenerateModal({
+  onClose,
+  snapshot,
+  initialType,
+}: {
+  onClose: () => void
+  snapshot: ReportSnapshot
+  initialType: ReportTemplate['type']
+}) {
+  const [type, setType] = useState<ReportTemplate['type']>(initialType)
   const [format, setFormat] = useState<ReportTemplate['format']>('PDF')
   const [generating, setGenerating] = useState(false)
 
@@ -336,14 +617,14 @@ function GenerateModal({ onClose }: { onClose: () => void }) {
       id: `report-${Date.now()}`,
       name: `${type} - ${new Date().toLocaleDateString()}`,
       type,
-      dateRange: 'Last 30 days',
+      dateRange: 'Current snapshot',
       generatedDate: new Date().toISOString(),
       format,
     }
 
     setGenerating(true)
     setTimeout(() => {
-      const blob = buildReportBlob(report)
+      const blob = buildReportBlob(report, snapshot)
       const fileName = `${report.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.${format.toLowerCase()}`
       downloadBlob(blob, fileName)
       setGenerating(false)
@@ -431,111 +712,188 @@ function GenerateModal({ onClose }: { onClose: () => void }) {
 }
 
 export function ReportsPage() {
+  const { mode } = useDataMode()
   const [showModal, setShowModal] = useState(false)
+  const [selectedType, setSelectedType] = useState<ReportTemplate['type']>('Executive Summary')
+  const [snapshot, setSnapshot] = useState<ReportSnapshot | null>(mode === 'demo' ? DEMO_REPORT_SNAPSHOT : null)
+  const [loading, setLoading] = useState(mode !== 'demo')
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  function handleDownload(report: ReportTemplate) {
-    const blob = buildReportBlob(report)
-    const fileName = `${report.name.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}.${report.format.toLowerCase()}`
-    downloadBlob(blob, fileName)
+  useEffect(() => {
+    if (mode === 'demo') {
+      setSnapshot(DEMO_REPORT_SNAPSHOT)
+      setLoadError(null)
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setLoading(true)
+    setLoadError(null)
+    Promise.allSettled([getDevices(), getSecurityChecks(), getMalwareDetections(), getADDomainStatus()])
+      .then(([deviceResult, checkResult, detectionResult, adResult]) => {
+        if (cancelled) return
+        if (deviceResult.status === 'rejected' || checkResult.status === 'rejected') {
+          const errors = [
+            deviceResult.status === 'rejected' ? deviceResult.reason : null,
+            checkResult.status === 'rejected' ? checkResult.reason : null,
+          ].filter(Boolean)
+          setSnapshot(null)
+          setLoadError(errors.map(error => error instanceof Error ? error.message : String(error)).join(' '))
+          return
+        }
+
+        setSnapshot({
+          devices: deviceResult.value.map(mapManagedDevice),
+          checks: checkResult.value.filter(check => check.is_active).map(check => ({
+            name: check.title,
+            category: check.category === 'patch' ? 'os_updates' : check.category === 'malware' ? 'malware_protection' : check.category,
+            failingDeviceCount: check.failing_device_count ?? 0,
+          })),
+          ...(detectionResult.status === 'fulfilled'
+            ? { detections: detectionResult.value.map(detection => ({
+              device_name: detection.device_name,
+              threat_name: detection.threat_name,
+              action: detection.action,
+              severity: detection.severity,
+              timestamp: detection.timestamp,
+            })) }
+            : {}),
+          ...(adResult.status === 'fulfilled' ? { adStatus: adResult.value } : {}),
+        })
+        if (detectionResult.status === 'rejected' || adResult.status === 'rejected') {
+          const unavailable = [
+            detectionResult.status === 'rejected' ? 'malware detection history' : '',
+            adResult.status === 'rejected' ? 'Active Directory details' : '',
+          ].filter(Boolean)
+          setLoadError(`Some optional report sources are unavailable: ${unavailable.join(' and ')}. Those sections will be marked accordingly.`)
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [mode])
+
+  const metrics = useMemo(() => snapshot ? getReportMetrics(snapshot) : null, [snapshot])
+  const findings = useMemo(() => snapshot ? getReportFindings(snapshot) : [], [snapshot])
+
+  function openGenerateModal(type: ReportTemplate['type'] = 'Executive Summary') {
+    setSelectedType(type)
+    setShowModal(true)
   }
 
   return (
     <>
-      {showModal && <GenerateModal onClose={() => setShowModal(false)} />}
+      {showModal && snapshot && <GenerateModal onClose={() => setShowModal(false)} snapshot={snapshot} initialType={selectedType} />}
 
-      <div className="space-y-4">
+      <div className="space-y-5">
         <PageHeader
           title="Reports"
-          description={`${reports.length} reports generated. Schedule or export compliance reports.`}
           action={
             <button
-              onClick={() => setShowModal(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-brand text-white rounded-md text-[13px] font-medium hover:bg-brand/90 transition-colors"
+              onClick={() => openGenerateModal()}
+              disabled={!snapshot || loading}
+              className="flex items-center gap-2 rounded-md bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Plus size={14} strokeWidth={2} />
               Generate Report
             </button>
           }
-        />
+        >
+          <div>
+            <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Reports</h1>
+          
+          </div>
+        </PageHeader>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
-          {REPORT_TYPES.map(type => {
-            const count = reports.filter(r => r.type === type).length
-            return (
-              <div key={type} className="bg-card border border-border rounded-md shadow-sm p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: TYPE_COLORS[type] }} />
-                  <span className="text-[13px] text-foreground font-semibold uppercase tracking-wider">{type}</span>
-                </div>
-                <p className="text-[30px] font-semibold leading-none tabular-nums text-foreground">{count}</p>
+        {loadError && (
+          <div className={cn(
+            'flex items-start gap-2 rounded-md border px-3.5 py-3 text-[12px]',
+            snapshot ? 'border-status-warning/30 bg-status-warning/5 text-foreground' : 'border-status-critical/30 bg-status-critical/5 text-foreground',
+          )}>
+            <AlertTriangle size={15} className={snapshot ? 'text-status-warning' : 'text-status-critical'} />
+            <p>{loadError}</p>
+          </div>
+        )}
+
+        {loading && (
+          <SectionCard>
+            <div className="flex items-center gap-2 text-[13px] text-muted-foreground">
+              <RefreshCw size={14} className="animate-spin" /> Loading report data…
+            </div>
+          </SectionCard>
+        )}
+
+        {metrics && snapshot && (
+          <>
+            <section className="rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
+              <div className="mb-4 flex items-center gap-2">
+                
               </div>
-            )
-          })}
-        </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <KpiCard label="Managed endpoints" value={metrics.endpoints} accentColor="#008080" />
+                <KpiCard label="Average compliance" value={metrics.scoreCoverage ? `${metrics.averageScore}%` : '—'} description={`${metrics.scoreCoverage} of ${metrics.endpoints} scores reported`} accentColor="#5B7FFF" />
+                <KpiCard label="Controls with failures" value={metrics.failingControls} accentColor={metrics.failingControls ? '#F79009' : '#12B76A'} />
+                <KpiCard label="Critical / EOL update risk" value={metrics.updateRisk} description={`${metrics.updateCoverage} of ${metrics.endpoints} endpoints reported update data`} accentColor={metrics.updateRisk ? '#F04438' : '#12B76A'} />
+              </div>
+            </section>
 
-        <SectionCard noPadding>
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-border">
-                {['Report Name', 'Type', 'Date Range', 'Format', 'Generated', ''].map((h, i) => (
-                  <th
-                    key={i}
-                    className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground text-left"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {reports.map(r => (
-                <tr
-                  key={r.id}
-                  className="border-b border-border last:border-0 hover:bg-surface-hover transition-colors h-12"
+            <SectionCard title="Priority findings">
+              <div className="divide-y divide-border">
+                {findings.map(finding => {
+                  const color = finding.severity === 'critical' ? 'var(--status-critical)' : finding.severity === 'warning' ? 'var(--status-warning)' : 'var(--status-good)'
+                  return (
+                    <div key={finding.title} className="flex items-center gap-3 py-3 first:pt-0 last:pb-0">
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-surface text-[13px] font-semibold tabular-nums" style={{ color: finding.severity ? color : 'var(--muted-foreground)' }}>
+                        {finding.count}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] font-semibold text-foreground">{finding.title}</p>
+                        <p className="mt-0.5 text-[12px] text-muted-foreground">{finding.detail}</p>
+                      </div>
+                      {finding.severity && (
+                        <span className="hidden rounded-full border border-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground sm:inline-flex">
+                          {finding.severity === 'info' ? 'Clear' : finding.severity}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+                {findings.length === 0 && <p className="py-3 text-[12px] text-muted-foreground">No report findings are available.</p>}
+              </div>
+            </SectionCard>
+          </>
+        )}
+
+        <SectionCard title="Report templates" description="Choose a report to generate from the current snapshot." noPadding>
+          <div className="divide-y divide-border">
+            {REPORT_TYPES.map(type => (
+              <div key={type} className="flex flex-col gap-3 px-4 py-3.5 transition-colors hover:bg-surface-hover sm:flex-row sm:items-center">
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <div className="min-w-0">
+                    <h3 className="text-[13px] font-semibold text-foreground">{type}</h3>
+                    <p className="mt-1 text-[12px] leading-relaxed text-muted-foreground">{REPORT_DESCRIPTIONS[type]}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  disabled={!snapshot || loading}
+                  onClick={() => openGenerateModal(type)}
+                  className="inline-flex shrink-0 items-center justify-center gap-2 self-start rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-foreground transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-50 sm:self-center"
                 >
-                  <td className="px-3">
-                    <div className="flex items-center gap-2">
-                      <FormatIcon format={r.format} />
-                      <span className="font-medium text-foreground text-[13px] truncate max-w-60">{r.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-3">
-                    <span
-                      className="inline-flex items-center gap-1.5 text-[12px]"
-                      style={{ color: TYPE_COLORS[r.type] }}
-                    >
-                      <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: TYPE_COLORS[r.type] }} />
-                      {r.type}
-                    </span>
-                  </td>
-                  <td className="px-3 text-muted-foreground text-[12px]">{r.dateRange}</td>
-                  <td className="px-3">
-                    <span className={cn(
-                      'inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold uppercase tracking-wide',
-                      r.format === 'PDF' ? 'bg-[#E87F9B]/15 text-[#E87F9B]' : 'bg-[#008080]/15 text-[#008080]'
-                    )}>
-                      {r.format}
-                    </span>
-                  </td>
-                  <td className="px-3 text-muted-foreground text-[12px]">
-                    {formatDistanceToNow(new Date(r.generatedDate), { addSuffix: true })}
-                  </td>
-                  <td className="px-3">
-                    <div className="flex items-center justify-end gap-1.5">
-                      <button
-                        onClick={() => handleDownload(r)}
-                        className="w-7 h-7 flex items-center justify-center rounded hover:bg-surface text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={`Download ${r.name}`}
-                      >
-                        <Download size={13} strokeWidth={1.5} />
-                      </button>
-                      <ChevronRight size={13} strokeWidth={1.5} className="text-muted-foreground" />
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  <ArrowDownToLine size={13} />
+                  Generate
+                </button>
+              </div>
+            ))}
+          </div>
+          <p className="border-t border-border px-4 py-3 text-[11px] text-muted-foreground">
+            Reports include the available findings and device-level evidence at generation time. Unavailable sources are identified in the export rather than estimated.
+          </p>
         </SectionCard>
       </div>
     </>

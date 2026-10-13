@@ -116,7 +116,11 @@ export function OverviewPage() {
     status: device.status === 'compliant' ? 'active' : device.status === 'critical' ? 'error' : 'inactive' as ManagedDevice['status'],
     last_checkin: device.lastSeen,
     created_at: device.lastSeen,
-  })) : liveDevices.map(device => ({ ...device, health: 'unknown', complianceScore: undefined }))
+  })) : liveDevices.map(device => ({
+    ...device,
+    health: device.compliance_score >= 85 ? 'compliant' : device.compliance_score >= 65 ? 'warning' : 'critical',
+    complianceScore: Number.isFinite(device.compliance_score) ? device.compliance_score : undefined,
+  }))
   const displayAlerts = overviewDemoMode ? demoAlerts.map(alert => ({
     id: alert.id,
     title: alert.message,
@@ -125,8 +129,13 @@ export function OverviewPage() {
     status: 'active' as const,
     alert_type: 'compliance_failure',
     created_at: alert.timestamp,
-    device_name: alert.deviceName,
-  })) : liveAlerts
+    device_name: alert.deviceName || 'Fleet-wide',
+  })) : liveAlerts.map(alert => ({
+    ...alert,
+    device_name: alert.device_name
+      || displayDevices.find(device => device.id === alert.device_id || device.device_id === alert.device_id)?.hostname
+      || 'Fleet-wide',
+  }))
   const displayChecks = overviewDemoMode ? demoChecks.map(check => ({
     id: check.id,
     check_id: check.id,
@@ -307,7 +316,7 @@ export function OverviewPage() {
         {/* Category Health Row */}
         <div className="order-3 grid grid-cols-1 gap-4 xl:col-span-2 lg:grid-cols-3">
           <Link href="/active-directory" className="block group">
-            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
+            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-card px-4 pb-4 pt-0 transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:bg-surface-hover hover:shadow-md">
               <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Active Directory</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Domain Controllers</span><span className="text-black dark:text-white tabular-nums">0/0 healthy</span></div>
@@ -318,7 +327,7 @@ export function OverviewPage() {
           </Link>
 
           <Link href="/malware-protection" className="block group">
-            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
+            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-card px-4 pb-4 pt-0 transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:bg-surface-hover hover:shadow-md">
               <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">Malware Protection</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">RTP coverage</span><span className="text-black dark:text-white tabular-nums">{stats.rtpCoverage}%</span></div>
@@ -329,7 +338,7 @@ export function OverviewPage() {
           </Link>
 
           <Link href="/patch-compliance" className="block group">
-            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-[0_1px_3px_rgba(15,23,42,0.04)] px-4 pb-4 pt-0 hover:border-brand/40 hover:bg-surface-hover transition-colors">
+            <div className="relative h-full min-h-[148px] bg-card border border-border/70 rounded-lg shadow-card px-4 pb-4 pt-0 transition-[transform,box-shadow,border-color,background-color] duration-200 hover:-translate-y-0.5 hover:border-brand/40 hover:bg-surface-hover hover:shadow-md">
               <div className="-mx-4 mb-4 flex items-center justify-between border-b border-border/70 px-4 py-3"><span className="text-[12px] font-semibold uppercase tracking-wider text-foreground">OS Updates</span><ArrowRight size={14} strokeWidth={1.75} className="text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground" /></div>
               <div className="space-y-2 text-[12px] font-medium text-black dark:text-white">
                 <div className="flex justify-between text-[12px]"><span className="text-black dark:text-white">Fully patched</span><span className="text-black dark:text-white tabular-nums">{stats.patchCompliance}%</span></div>
@@ -364,8 +373,8 @@ export function OverviewPage() {
                 <table className="w-full table-fixed text-[12px]">
                   <thead>
                     <tr className="border-b border-border">
-                      <th className="w-[62%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Threat</th>
-                      <th className="w-[22%] px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Device</th>
+                      <th className="w-[54%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Threat</th>
+                      <th className="w-[30%] px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Device</th>
                       <th className="w-[16%] px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Time</th>
                     </tr>
                   </thead>
@@ -395,21 +404,21 @@ export function OverviewPage() {
               <table className="w-full table-fixed text-[12px] font-medium text-black dark:text-white">
                 <thead>
                   <tr className="border-b border-border">
-                    <th className="w-[40%] px-4 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Device</th>
+                    <th className="w-[40%] px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Device</th>
                     <th className="w-[32%] px-2 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Status</th>
-                    <th className="w-[28%] px-4 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Time</th>
+                    <th className="w-[28%] px-6 py-2 text-right text-[10px] font-semibold uppercase tracking-wider text-black dark:text-white">Time</th>
                   </tr>
                 </thead>
                 <tbody>
                     {displayDevices.slice(0, 4).map(device => (
                     <tr key={device.id} className="h-10 border-b border-border last:border-b-0 hover:bg-surface-hover transition-colors">
-                      <td className="max-w-0 px-4 py-2">
+                      <td className="max-w-0 px-2 py-2">
                         <span className="block truncate font-mono" title={device.hostname}>{device.hostname}</span>
                       </td>
                       <td className="px-2 py-2">
                         <span>{device.status === 'active' ? 'Active' : device.status.charAt(0).toUpperCase() + device.status.slice(1)}</span>
                       </td>
-                      <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <td className="px-6 py-2 text-right whitespace-nowrap">
                         {device.last_checkin ? formatDistanceToNow(new Date(device.last_checkin), { addSuffix: true }) : 'Never'}
                       </td>
                     </tr>

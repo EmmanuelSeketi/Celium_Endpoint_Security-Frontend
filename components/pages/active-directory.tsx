@@ -41,7 +41,7 @@ function ADDetailDrawer({ title, onClose, children }: { title: string; onClose: 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <aside className="relative z-10 flex h-full w-full max-w-[520px] flex-col overflow-y-auto border-l border-border bg-card">
+      <aside className="relative z-10 flex h-full w-full max-w-[520px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl">
         <div className="sticky top-0 flex items-center justify-between border-b border-border bg-card px-5 py-4">
           <h2 className="text-[15px] font-semibold text-foreground">{title}</h2>
           <button type="button" onClick={onClose} aria-label="Close details" className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground hover:bg-surface-hover hover:text-foreground">
@@ -227,7 +227,7 @@ export function ActiveDirectoryPage() {
 
       {/* Domain Controllers */}
       <SectionCard title="Domain Controllers">
-        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-sm">
           <table className="w-full min-w-[680px] table-fixed text-left text-[12px]">
             <colgroup>
               <col className="w-[30%]" />
@@ -343,7 +343,7 @@ export function ActiveDirectoryPage() {
 
       {/* Backend-ready historical records */}
       <SectionCard title="Stale Accounts" description="Accounts with no successful logon for 90+ days. Select a record to inspect its directory source and account attributes.">
-        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-sm">
           <table className="w-full min-w-[640px] table-fixed text-left text-[12px]">
             <colgroup>
               <col className="w-[28%]" />
@@ -377,7 +377,7 @@ export function ActiveDirectoryPage() {
       </SectionCard>
 
       <SectionCard title="Kerberos Event History" description="Normalized domain-controller security events retained for investigation and correlation.">
-        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-sm">
           <table className="w-full min-w-[760px] table-fixed text-left text-[12px]">
             <colgroup>
               <col className="w-[16%]" />
@@ -415,7 +415,7 @@ export function ActiveDirectoryPage() {
 
       {/* Privileged Group Changes */}
       <SectionCard title="Privileged Group Changes" description="Recent modifications to high-privilege AD groups.">
-        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+        <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-sm">
           <table className="w-full min-w-[640px] table-fixed text-left text-[12px]">
             <colgroup>
               <col className="w-[22%]" />
@@ -461,7 +461,7 @@ export function ActiveDirectoryPage() {
 
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="bg-card border border-border rounded-md shadow-sm p-4 col-span-2">
+        <div className="col-span-2 rounded-md border border-border bg-card p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md">
           <p className="text-[13px] font-semibold uppercase tracking-wider text-foreground mb-3">Logon Summary (24h)</p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -481,7 +481,7 @@ export function ActiveDirectoryPage() {
             </div>
           </div>
         </div>
-        <div className="bg-card border border-border rounded-md shadow-sm p-4">
+        <div className="rounded-md border border-border bg-card p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md">
           <p className="text-[13px] font-semibold uppercase tracking-wider text-foreground mb-2">Stale Accounts</p>
           <div className="flex items-center gap-2">
             <Users size={16} strokeWidth={1.5} className="text-[#F79009]" />
@@ -489,7 +489,7 @@ export function ActiveDirectoryPage() {
           </div>
           <p className="text-[12px] font-medium text-muted-foreground mt-1">No login in 90+ days</p>
         </div>
-        <div className="bg-card border border-border rounded-md shadow-sm p-4">
+        <div className="rounded-md border border-border bg-card p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md">
           <p className="text-[13px] font-semibold uppercase tracking-wider text-foreground mb-2">Group Changes (7d)</p>
           <div className="flex items-center gap-2">
             <Clock size={16} strokeWidth={1.5} className="text-brand" />
@@ -501,7 +501,7 @@ export function ActiveDirectoryPage() {
 
       {selectedStaleAccount && (
         <ADDetailDrawer title={`Stale account: ${selectedStaleAccount.accountName}`} onClose={() => setSelectedStaleAccount(null)}>
-          <div className="divide-y divide-border rounded-md border border-border bg-surface px-3">
+          <div className="divide-y divide-border rounded-md border border-border bg-surface px-3 shadow-sm">
             <DetailField label="Account" value={selectedStaleAccount.accountName} mono />
             <DetailField label="Display name" value={selectedStaleAccount.displayName ?? 'Not provided'} />
             <DetailField label="Account type" value={selectedStaleAccount.accountType} />
@@ -517,7 +517,7 @@ export function ActiveDirectoryPage() {
 
       {selectedKerberosEvent && (
         <ADDetailDrawer title={`Kerberos event ${selectedKerberosEvent.eventId}`} onClose={() => setSelectedKerberosEvent(null)}>
-          <div className="divide-y divide-border rounded-md border border-border bg-surface px-3">
+          <div className="divide-y divide-border rounded-md border border-border bg-surface px-3 shadow-sm">
             <DetailField label="Activity" value={selectedKerberosEvent.activity.replace(/_/g, ' ')} />
             <DetailField label="Account" value={selectedKerberosEvent.account} mono />
             <DetailField label="Service principal name" value={selectedKerberosEvent.servicePrincipalName ?? 'Not applicable'} mono />

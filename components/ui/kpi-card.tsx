@@ -45,7 +45,7 @@ export function KpiCard({
   return (
     <div
       className={cn(
-        'relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card p-4 flex flex-col gap-2 text-foreground',
+        'relative h-full min-h-[160px] bg-card border border-border rounded-md shadow-card p-4 flex flex-col gap-2 text-foreground transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md',
         className
       )}
     >

@@ -357,7 +357,7 @@ export function SettingsPage() {
         {/* Section nav: horizontal tabs on small screens, sticky sidebar on md+ */}
         <nav
           aria-label="Settings sections"
-          className="flex gap-1 overflow-x-auto rounded-md border border-border bg-card p-1.5 shadow-sm md:sticky md:top-4 md:w-56 md:shrink-0 md:flex-col md:overflow-visible"
+          className="flex gap-1 overflow-x-auto rounded-md border border-border bg-card p-1.5 shadow-card transition-shadow duration-200 hover:shadow-md md:sticky md:top-4 md:w-56 md:shrink-0 md:flex-col md:overflow-visible"
         >
           {SECTIONS.map(({ id, label, icon: Icon }) => {
             const active = section === id

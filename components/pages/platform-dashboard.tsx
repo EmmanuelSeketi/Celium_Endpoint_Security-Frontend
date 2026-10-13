@@ -28,7 +28,7 @@ export function PlatformDashboardPage() {
           { label: 'Active organizations', value: stats.active_orgs, icon: Building2 },
           { label: 'Reporting devices', value: stats.active_devices, icon: Laptop },
           { label: 'Compliant devices', value: stats.health_summary.compliant_devices, icon: ShieldCheck },
-        ].map(({ label, value, icon: Icon }) => <div key={label} className="flex items-center gap-3 border border-border rounded-md p-4"><Icon size={18} className="text-brand" /><div><p className="text-[12px] text-muted-foreground">{label}</p><p className="text-xl font-semibold tabular-nums">{value.toLocaleString()}</p></div></div>)}
+        ].map(({ label, value, icon: Icon }) => <div key={label} className="flex items-center gap-3 rounded-md border border-border p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md"><Icon size={18} className="text-brand" /><div><p className="text-[12px] text-muted-foreground">{label}</p><p className="text-xl font-semibold tabular-nums">{value.toLocaleString()}</p></div></div>)}
       </div>
     </SectionCard>
     <SectionCard title="Attention required"><div className="flex items-center gap-3 text-[13px] text-muted-foreground"><Bell size={16} className="text-status-warning" />{stats.total_alerts} unresolved alerts need review across the tenant fleet.</div></SectionCard>

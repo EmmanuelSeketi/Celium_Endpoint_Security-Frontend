@@ -589,11 +589,11 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
               {commandMessage && <p className="text-[12px] text-muted-foreground">{commandMessage}</p>}
               {updateAction === 'scan_checks' && <p className="flex items-center gap-2 text-[11px] font-medium text-brand"><Loader2 size={12} className="animate-spin" />Check {Math.min(currentCheckNumber, checkExecutionOrder.length)} of {checkExecutionOrder.length}{currentCheckId ? ` · ${checks.find(check => check.check_id === currentCheckId)?.title ?? currentCheckId}` : ' · Finalizing results'}</p>}
               {checksLoading ? (
-                <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground">Loading check results...</div>
+                <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground shadow-sm">Loading check results...</div>
               ) : checks.length === 0 ? (
-                <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground">No check results have been reported yet.</div>
+                <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground shadow-sm">No check results have been reported yet.</div>
               ) : (
-                <div className="divide-y divide-border rounded-md border border-border bg-surface">
+                <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">
                   {checks.map(check => {
                     const displayStatus = checkProgress[check.check_id] ?? check.status
                     const statusColor = displayStatus === 'passed' ? 'var(--status-good)' : displayStatus === 'failed' ? STATUS_COLORS.critical : displayStatus === 'error' ? STATUS_COLORS.warning : 'var(--status-unknown)'
@@ -624,7 +624,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
           {tab === 'overview' && (
             <div className="space-y-4">
               {/* Score Ring */}
-              <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4">
+              <div className="flex items-center gap-4 rounded-md border border-border bg-surface p-4 shadow-sm">
                 <Gauge
                   width={104}
                   height={104}
@@ -710,7 +710,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                       <SectionIcon size={14} strokeWidth={1.75} className="shrink-0 text-black dark:text-white" />
                       <p className="text-[13px] font-semibold text-foreground">{section.title}</p>
                     </div>
-                    <div className="divide-y divide-border rounded-md border border-border bg-surface">
+                    <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">
                       {section.rows.map(item => (
                         <div key={item.label} className="flex items-center justify-between gap-4 px-3 py-2.5">
                           <span className="text-[12px] text-black dark:text-white">{item.label}</span>
@@ -744,7 +744,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                 return (
                   <>
                     {/* Status card */}
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4">
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4 shadow-sm">
                       <div className="flex items-center gap-3.5">
                         <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${updatesPaused ? STATUS_COLORS.warning : updateState.color}1f` }}>
                           {updatesPaused
@@ -778,14 +778,14 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                         Update scan failed{device.patchStatus.updateScanError ? `: ${device.patchStatus.updateScanError}` : '.'}
                       </div>
                     ) : updateInventoryStale ? (
-                      <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-muted-foreground">
+                      <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-muted-foreground shadow-sm">
                         Available updates are unverified until this endpoint completes a fresh update scan.
                       </div>
                     ) : null}
 
                     {/* Available update banner */}
                     {hasMissing && updateBannerOpen && (
-                      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-3">
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-3 shadow-sm">
                         <div className="flex min-w-0 items-center gap-2.5">
                           <Info size={15} strokeWidth={2} className="shrink-0 text-brand" />
                           <p className="truncate text-[12px] text-black dark:text-white">
@@ -807,7 +807,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                     {/* More options */}
                     <div>
                       <p className="mb-2 text-[13px] font-semibold text-foreground">More options</p>
-                      <div className="divide-y divide-border rounded-md border border-border bg-surface">
+                      <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">
                         <div className="flex items-center justify-between gap-4 px-4 py-3">
                           <div className="flex items-start gap-3">
                             <Megaphone size={15} strokeWidth={1.75} className="mt-0.5 shrink-0 text-black dark:text-white" />
@@ -930,7 +930,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                 return (
                   <>
                     {/* Status card */}
-                    <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4">
+                    <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4 shadow-sm">
                       <div className="flex items-center gap-3.5">
                         <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${protectionColor}1f` }}>
                           {protectionActive ? (
@@ -958,7 +958,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
 
                     {/* Current threats banner */}
                     {device.os === 'Windows' && (
-                      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-3">
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-4 py-3 shadow-sm">
                         <div className="flex min-w-0 items-center gap-2.5">
                           {hasThreats ? (
                             <Bug size={15} strokeWidth={2} className="shrink-0" style={{ color: STATUS_COLORS.critical }} />
@@ -990,7 +990,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                                 <p className="text-[13px] font-semibold text-foreground">{section.title}</p>
                               </div>
                               <p className="mb-2 ml-[22px] text-[11px] text-muted-foreground">{section.description}</p>
-                              <div className="divide-y divide-border rounded-md border border-border bg-surface">
+                              <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">
                                 {rows.map(renderRow)}
                               </div>
                             </div>
@@ -1007,7 +1007,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                           <Shield size={14} strokeWidth={1.75} className="shrink-0 text-black dark:text-white" />
                           <p className="text-[13px] font-semibold text-foreground">Protection details</p>
                         </div>
-                        <div className="divide-y divide-border rounded-md border border-border bg-surface">
+                        <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">
                           {malwareDetails.rows.map(renderRow)}
                         </div>
                       </div>
@@ -1024,7 +1024,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
               {scanHistoryLoading ? <p className="py-8 text-center text-[12px] text-muted-foreground">Loading scan history…</p> : (() => {
                 const runs = new Map<string, DeviceScanHistory[]>()
                 for (const result of scanHistory) runs.set(result.checked_at, [...(runs.get(result.checked_at) ?? []), result])
-                return <div className="divide-y divide-border rounded-md border border-border bg-surface">{[...runs.entries()].map(([timestamp, results]) => {
+                return <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">{[...runs.entries()].map(([timestamp, results]) => {
                   const failed = results.filter(result => result.status === 'failed' || result.status === 'error').length
                   return <div key={timestamp} className="px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[12px] text-foreground">{format(new Date(timestamp), 'MMM d, yyyy HH:mm:ss')}</span><span className="text-[11px] text-muted-foreground">{results.length} checks · {failed} failed</span></div><div className="mt-2 divide-y divide-border">{results.map(result => <div key={result.id} className="flex items-start justify-between gap-3 py-2"><div><p className="text-[12px] font-medium text-foreground">{result.check_title}</p>{result.details && <p className="mt-0.5 text-[11px] text-muted-foreground">{result.details}</p>}</div><span className={cn('text-[11px] font-semibold capitalize', result.status === 'passed' ? 'text-status-compliant' : result.status === 'failed' ? 'text-status-critical' : 'text-status-warning')}>{result.status}</span></div>)}</div></div>
                 })}{scanHistory.length === 0 && <p className="px-3 py-8 text-center text-[12px] text-muted-foreground">No compliance scan history has been reported by this endpoint.</p>}</div>

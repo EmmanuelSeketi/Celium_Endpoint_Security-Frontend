@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { X, ListChecks, ChevronRight, Info } from 'lucide-react'
 import { complianceChecks } from '@/lib/mock-data'
 import { PageHeader } from '@/components/ui/page-header'
+import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import type { ComplianceCheck, Severity, CheckCategory } from '@/lib/types'
@@ -59,7 +60,7 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative bg-card border-l border-border w-[480px] h-full overflow-y-auto z-10 flex flex-col">
+      <div className="relative z-10 flex h-full w-[480px] flex-col overflow-y-auto border-l border-border bg-card shadow-2xl">
         <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-card">
           <div className="flex-1 pr-4">
             <div className="mb-1.5">
@@ -74,7 +75,7 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
 
         <div className="p-5 space-y-5">
           {/* Failing devices */}
-          <div className="flex items-center gap-3 bg-surface border border-border rounded-md p-4">
+          <div className="flex items-center gap-3 rounded-md border border-border bg-surface p-4 shadow-sm">
             <div
               className="text-[30px] font-semibold leading-none tabular-nums"
               style={{ color: check.severity === 'critical' ? STATUS_COLORS.critical : check.severity === 'warning' ? STATUS_COLORS.warning : STATUS_COLORS.compliant }}
@@ -97,7 +98,7 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
           </div>
 
           {/* Remediation */}
-          <div className="bg-surface border border-border rounded-md p-4">
+          <div className="rounded-md border border-border bg-surface p-4 shadow-sm">
             <h3 className="text-[12px] font-semibold text-foreground uppercase tracking-wider mb-2">Remediation Steps</h3>
             <p className="text-[13px] text-foreground leading-relaxed">{check.remediation}</p>
           </div>
@@ -170,7 +171,7 @@ export function ChecksPage() {
         />
 
         {/* Summary row */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
           {[
             { label: 'Total Checks', value: checks.length, color: undefined },
             { label: 'Critical Checks', value: criticalCount, color: STATUS_COLORS.critical },
@@ -181,10 +182,14 @@ export function ChecksPage() {
               color: STATUS_COLORS.warning,
             },
           ].map(({ label, value, color }) => (
-            <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">{label}</p>
-              <p className="text-[20px] font-semibold leading-snug tabular-nums" style={color ? { color } : undefined}>{value}</p>
-            </div>
+            <KpiCard
+              key={label}
+              label={label}
+              accentColor={color}
+              {...(label === 'Most failed check'
+                ? { children: <p className="break-words text-[16px] font-semibold leading-snug text-foreground" style={color ? { color } : undefined}>{value}</p> }
+                : { value })}
+            />
           ))}
         </div>
 
@@ -296,7 +301,7 @@ export function ChecksPage() {
         </SectionCard>
 
         {sorted.length > PAGE_SIZE && (
-          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2 shadow-sm">
             <p className="text-[12px] text-muted-foreground">
               Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, sorted.length)} of {sorted.length}
             </p>

@@ -89,6 +89,7 @@ export function PatchCompliancePage() {
   const [deviceSearch, setDeviceSearch] = useState('')
   const [updateStateFilter, setUpdateStateFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
+  const [selectedUpdateDevice, setSelectedUpdateDevice] = useState<Device | null>(null)
   const [activeCommands, setActiveCommands] = useState<Record<string, { command: 'check_updates' | 'install_updates'; phase: 'queued' | 'running' }>>({})
   const [commandError, setCommandError] = useState<string | null>(null)
   const pageSize = 8
@@ -165,6 +166,9 @@ export function PatchCompliancePage() {
         updateScanError: device.patch_status?.update_scan_error,
         osEol: device.patch_status?.os_eol ?? false,
         eolDate: device.patch_status?.eol_date,
+        updateHistory: device.update_history,
+        updatesAutomatic: device.updates_automatic,
+        updatesPauseUntil: device.updates_pause_until,
       },
       domainJoined: false,
     }))
@@ -325,25 +329,156 @@ export function PatchCompliancePage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <PageHeader
         title="OS Updates"
         description="Update coverage, operating system lifecycle, and device update posture."
-      />
+        className="mb-5"
+      >
+        <div className="flex items-start gap-3">
+          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand/15 bg-brand/10 text-brand">
+            <RefreshCw size={19} strokeWidth={1.75} />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">OS Updates</h1>
+            <p className="mt-1 text-[13px] text-muted-foreground">
+              Update coverage, operating system lifecycle, and device update posture.
+            </p>
+          </div>
+        </div>
+      </PageHeader>
+
+      {selectedUpdateDevice && (() => {
+        const device = selectedUpdateDevice
+        const scanStatus = device.patchStatus.updateScanStatus ?? 'unknown'
+        const scanStatusLabel = scanStatus === 'succeeded' ? 'Successful' : scanStatus === 'failed' ? 'Failed' : 'Unknown'
+        const scanStatusColor = scanStatus === 'succeeded' ? STATUS_COLORS.compliant : scanStatus === 'failed' ? STATUS_COLORS.critical : STATUS_COLORS.unknown
+        const lastScan = Date.parse(device.patchStatus.lastUpdateCheck)
+        const pauseUntil = device.patchStatus.updatesPauseUntil ? Date.parse(device.patchStatus.updatesPauseUntil) : Number.NaN
+        const state = getUpdateState(device)
+        const StateIcon = state.icon
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setSelectedUpdateDevice(null)}>
+            <section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="update-device-detail-title"
+              onClick={event => event.stopPropagation()}
+              className="w-full max-w-lg overflow-hidden rounded-md border border-border bg-card shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">OS update details</p>
+                  <h2 id="update-device-detail-title" className="mt-1 truncate text-[16px] font-semibold text-foreground">{device.name}</h2>
+                  <p className="mt-1 text-[12px] text-muted-foreground">{device.osCaption || device.os} · {device.osVersion || 'Version not reported'}</p>
+                </div>
+                <button type="button" onClick={() => setSelectedUpdateDevice(null)} aria-label="Close update details" className="rounded p-1 text-muted-foreground transition-colors hover:bg-surface-hover hover:text-foreground">
+                  <X size={16} />
+                </button>
+              </div>
+
+              <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+                <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4 shadow-sm">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current update posture</p>
+                    <p className="mt-1 text-[12px] text-foreground">
+                      {device.patchStatus.missingCritical} critical / important · {device.patchStatus.missingTotal} total missing
+                    </p>
+                  </div>
+                  <span className="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-semibold" style={{ color: state.color, backgroundColor: `${state.color}1A` }}>
+                    <StateIcon size={14} strokeWidth={1.75} />
+                    {state.label}
+                  </span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Update scan</p>
+                    <p className="mt-2 text-[13px] font-semibold" style={{ color: scanStatusColor }}>{scanStatusLabel}</p>
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Last scan {Number.isFinite(lastScan) ? format(new Date(lastScan), 'MMM d, yyyy HH:mm') : 'Never'}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Restart required</p>
+                    <p className={cn('mt-2 text-[13px] font-semibold', isInventoryStale(device) ? 'text-muted-foreground' : device.patchStatus.pendingReboot ? 'text-status-warning' : 'text-status-compliant')}>
+                      {isInventoryStale(device) ? 'Unknown — scan is stale' : device.patchStatus.pendingReboot ? 'Yes' : 'No'}
+                    </p>
+                  </div>
+                  <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Update policy</p>
+                    <p className="mt-2 text-[13px] font-semibold text-foreground">
+                      {device.patchStatus.updatesAutomatic === undefined ? 'Not reported' : device.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
+                    </p>
+                    {Number.isFinite(pauseUntil) && (
+                      <p className="mt-1 text-[11px] text-muted-foreground">Paused until {format(new Date(pauseUntil), 'MMM d, yyyy')}</p>
+                    )}
+                  </div>
+                  <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">OS support</p>
+                    <p className={cn('mt-2 text-[13px] font-semibold', device.patchStatus.osEol ? 'text-status-critical' : 'text-status-compliant')}>
+                      {device.patchStatus.osEol ? 'End of support' : 'Supported'}
+                    </p>
+                    {device.patchStatus.eolDate && <p className="mt-1 text-[11px] text-muted-foreground">End date {device.patchStatus.eolDate}</p>}
+                  </div>
+                </div>
+
+                {device.patchStatus.updateScanError && (
+                  <div className="rounded-md border border-status-critical/20 bg-status-critical/5 p-3">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-status-critical">Scan error</p>
+                    <p className="mt-1 break-words text-[12px] text-foreground">{device.patchStatus.updateScanError}</p>
+                  </div>
+                )}
+
+                <section aria-labelledby="update-history-heading">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 id="update-history-heading" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Update history</h3>
+                    <span className="text-[11px] text-muted-foreground">{device.patchStatus.updateHistory?.length ?? 0} entries</span>
+                  </div>
+                  <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-surface shadow-sm">
+                    {(device.patchStatus.updateHistory ?? []).map((item, index) => {
+                      const eventDate = item.date ? new Date(String(item.date)) : null
+                      const eventDescription = item.description ?? item.operation
+                      return (
+                        <div key={index} className="space-y-1 px-3 py-2.5">
+                          <p className="text-[12px] font-medium text-foreground">{String(item.title ?? 'Windows Update')}</p>
+                          <p className="text-[11px] text-muted-foreground">
+                            {String(item.status ?? 'Unknown')} · {eventDate && Number.isFinite(eventDate.getTime()) ? format(eventDate, 'MMM d, yyyy HH:mm') : 'Unknown date'}
+                          </p>
+                          {Boolean(eventDescription) && (
+                            <p className="text-[11px] text-muted-foreground">{String(eventDescription)}</p>
+                          )}
+                        </div>
+                      )
+                    })}
+                    {(device.patchStatus.updateHistory ?? []).length === 0 && (
+                      <p className="px-3 py-6 text-center text-[12px] text-muted-foreground">No update history reported for this endpoint.</p>
+                    )}
+                  </div>
+                </section>
+              </div>
+              <div className="flex justify-end border-t border-border px-5 py-3">
+                <button type="button" onClick={() => setSelectedUpdateDevice(null)} className="rounded-md border border-border px-3 py-1.5 text-[12px] text-foreground transition-colors hover:bg-surface-hover">Close</button>
+              </div>
+            </section>
+          </div>
+        )
+      })()}
 
       {loading && (
-        <div className="flex items-center justify-center py-10 text-[13px] text-muted-foreground">Loading patch data...</div>
+        <div className="flex items-center justify-center rounded-lg border border-border bg-card py-12 text-[13px] text-muted-foreground shadow-card">Loading patch data...</div>
       )}
       {loadError && (
-        <div className="flex flex-col items-center justify-center gap-2 py-10 text-[13px] text-status-critical">
+        <div className="flex flex-col items-center justify-center gap-3 rounded-lg border border-status-critical/20 bg-status-critical/5 py-10 text-[13px] text-status-critical">
           <p>{loadError}</p>
-          <button type="button" onClick={() => mode !== 'demo' && window.location.reload()} className="rounded-md border border-border px-3 py-1.5 text-[12px] transition-colors hover:bg-surface-hover">Retry</button>
+          <button type="button" onClick={() => mode !== 'demo' && window.location.reload()} className="rounded-md border border-border bg-card px-3 py-1.5 text-[12px] transition-colors hover:bg-surface-hover">Retry</button>
         </div>
       )}
 
       {!loading && !loadError && (
-        <>
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
           {
             label: 'Update Compliance',
@@ -381,12 +516,12 @@ export function PatchCompliancePage() {
       </div>
 
       {/* Platform posture */}
-      <SectionCard title="Update posture by platform" description="A quick view of update readiness across the fleet.">
+      <SectionCard title="Update posture by platform" description="A quick view of update readiness across the fleet." className="rounded-lg transition-shadow duration-200 hover:shadow-md">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
           {platformSummaries.map(({ os, total, scanned, current, pending }) => {
             const percentage = scanned ? Math.round((current / scanned) * 100) : null
             return (
-              <div key={os} className="rounded-md border border-border bg-surface px-4 py-3">
+              <div key={os} className="rounded-lg border border-border bg-gradient-to-br from-surface to-surface-elevated p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-2">
                     <OSIcon os={os} />
@@ -394,7 +529,7 @@ export function PatchCompliancePage() {
                   </div>
                   <span className="font-mono text-[13px] font-semibold text-foreground">{percentage === null ? '—' : `${percentage}%`}</span>
                 </div>
-                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
+                <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/70">
                   <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percentage ?? 0}%` }} />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
@@ -408,8 +543,8 @@ export function PatchCompliancePage() {
       </SectionCard>
 
       {/* Remediation signals and endpoint priority list */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
-        <SectionCard title="Remediation queue" description="Each endpoint appears once, assigned to its highest-priority reported state." className="min-w-0 lg:col-span-2">
+      <div className="order-4 grid grid-cols-1 items-stretch gap-5 lg:grid-cols-5">
+        <SectionCard title="Remediation queue" description="Each endpoint appears once, assigned to its highest-priority reported state." className="min-w-0 rounded-lg transition-shadow duration-200 hover:shadow-md lg:col-span-2">
           {devices.length === 0 ? (
             <div className="flex h-[220px] items-center justify-center text-center text-[12px] text-muted-foreground">No endpoint update data is available.</div>
           ) : (
@@ -422,13 +557,13 @@ export function PatchCompliancePage() {
           )}
         </SectionCard>
 
-        <SectionCard title="At-risk endpoints" description="Highest-priority devices, ranked by OS lifecycle, missing updates, restart state, then inventory age." className="min-w-0 lg:col-span-3">
+        <SectionCard title="At-risk endpoints" description="Highest-priority devices, ranked by OS lifecycle, missing updates, restart state, then inventory age." className="min-w-0 rounded-lg transition-shadow duration-200 hover:shadow-md lg:col-span-3">
           {atRiskDevices.length === 0 ? (
-            <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground">
+            <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground shadow-sm">
               No endpoint update risks are currently reported.
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-md border border-border bg-surface">
+            <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-sm">
               <div className="min-w-[760px]">
                 <div className="grid grid-cols-[minmax(190px,1.4fr)_minmax(160px,1fr)_minmax(190px,1.2fr)] items-center gap-3 border-b border-border px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                   <span>Endpoint</span>
@@ -481,19 +616,19 @@ export function PatchCompliancePage() {
 
       {/* EOL devices */}
       {eolDevices.length > 0 && (
-        <SectionCard title="End-of-Life Devices" description="These devices are running operating systems no longer receiving security updates.">
+        <SectionCard title="End-of-Life Devices" description="These devices are running operating systems no longer receiving security updates." className="order-5 rounded-lg transition-shadow duration-200 hover:shadow-md">
           <div className="space-y-2">
             {eolDevices.map(d => (
-              <div key={d.id} className="flex items-center justify-between bg-[#F04438]/5 border border-[#F04438]/20 rounded-md px-4 py-3">
+              <div key={d.id} className="flex items-center justify-between rounded-lg border border-status-critical/20 bg-status-critical/5 px-4 py-3 shadow-sm transition-shadow duration-200 hover:shadow-md">
                 <div className="flex items-center gap-3">
-                  <AlertTriangle size={15} strokeWidth={1.5} className="text-[#F04438] shrink-0" />
+                  <AlertTriangle size={15} strokeWidth={1.5} className="shrink-0 text-status-critical" />
                   <div>
                     <p className="font-mono text-[13px] font-medium text-foreground">{d.name}</p>
                      <p className="text-[11px] text-muted-foreground">{d.osCaption ? `${d.osCaption} · ${d.osVersion}` : d.osVersion}</p>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[12px] font-semibold text-[#F04438]">EOL{d.patchStatus.eolDate ? `: ${d.patchStatus.eolDate}` : ''}</p>
+                  <p className="text-[12px] font-semibold text-status-critical">EOL{d.patchStatus.eolDate ? `: ${d.patchStatus.eolDate}` : ''}</p>
                   <p className="text-[11px] text-muted-foreground">{d.patchStatus.missingCritical} critical missing</p>
                 </div>
               </div>
@@ -503,9 +638,9 @@ export function PatchCompliancePage() {
       )}
 
       {/* Device patch table */}
-      <SectionCard title="Device update status" description="All managed devices sorted by update exposure.">
-        {commandError && <p className="mb-2 text-[12px] text-status-critical">{commandError}</p>}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
+      <SectionCard title="Device update status" description="All managed devices sorted by update exposure." className="order-3 rounded-lg transition-shadow duration-200 hover:shadow-md">
+        {commandError && <p role="alert" className="mb-3 rounded-md border border-status-critical/20 bg-status-critical/5 px-3 py-2 text-[12px] text-status-critical">{commandError}</p>}
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1">
             <Search size={13} strokeWidth={1.5} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <input
@@ -538,32 +673,46 @@ export function PatchCompliancePage() {
             </button>
           )}
         </div>
-        <div className="overflow-x-auto rounded-md border border-border bg-surface">
+        <div className="overflow-x-auto rounded-lg border border-border bg-surface shadow-sm">
           <div className="min-w-[760px]">
-            <div className="grid grid-cols-12 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white border-b border-border">
+            <div className="grid grid-cols-12 border-b border-border bg-surface-elevated px-3 py-3 text-[13px] font-semibold uppercase tracking-wider text-black dark:text-white">
               <span className="col-span-2">Device</span>
               <span className="col-span-2">OS</span>
-              <span className="col-span-2">OS Version</span>
+              <span className="col-span-2 pl-4">OS Version</span>
               <span className="col-span-2 text-center">Update Policy</span>
               <span className="col-span-2 text-center">Pending Reboot</span>
               <span className="col-span-2">Update State</span>
             </div>
             <div className="divide-y divide-border">
               {pagedDevices.map(d => (
-                <div key={d.id} className="grid grid-cols-12 items-center px-3 py-2 text-[13px] transition-colors hover:bg-surface-hover">
+                <div
+                  key={d.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`View OS update details for ${d.name}`}
+                  onClick={() => setSelectedUpdateDevice(d)}
+                  onKeyDown={event => {
+                    if (event.target !== event.currentTarget) return
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      setSelectedUpdateDevice(d)
+                    }
+                  }}
+                  className="grid cursor-pointer grid-cols-12 items-center px-3 py-3 text-[13px] transition-colors hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand"
+                >
                   <div className="col-span-2">
-                    <span className="truncate font-mono text-[12px] text-black dark:text-white">{d.name}</span>
+                    <span className="truncate font-mono text-[13px] text-foreground">{d.name}</span>
                   </div>
-                  <span className="col-span-2 truncate text-[12px] text-black dark:text-white" title={d.osCaption ?? undefined}>
+                  <span className="col-span-2 truncate text-[13px] text-foreground" title={d.osCaption ?? undefined}>
                     {d.osCaption || 'Not reported'}
                   </span>
-                  <span className="col-span-2 truncate font-mono text-[12px] text-black dark:text-white" title={d.osVersion}>
+                  <span className="col-span-2 truncate pl-4 font-mono text-[13px] text-foreground" title={d.osVersion}>
                     {d.osVersion || 'Not reported'}
                   </span>
-                  <span className="col-span-2 text-center text-[12px] text-black dark:text-white">
+                  <span className="col-span-2 text-center text-[13px] text-foreground">
                     {d.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
                   </span>
-                  <span className={cn('col-span-2 text-center text-[12px] font-medium', isInventoryStale(d) ? 'text-muted-foreground' : d.patchStatus.pendingReboot ? 'text-[#F79009]' : 'text-[#16A34A]')}>
+                  <span className={cn('col-span-2 text-center text-[13px] font-medium', isInventoryStale(d) ? 'text-muted-foreground' : d.patchStatus.pendingReboot ? 'text-status-warning' : 'text-status-compliant')}>
                     {isInventoryStale(d) ? 'Unknown' : d.patchStatus.pendingReboot ? 'Required' : 'No'}
                   </span>
                   <span className="col-span-2 flex flex-col items-start gap-1">
@@ -572,7 +721,7 @@ export function PatchCompliancePage() {
                       const Icon = state.icon
                       return (
                         <span
-                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[11px] font-medium"
+                          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-[12px] font-medium"
                           style={{ color: state.color, backgroundColor: `${state.color}1A` }}
                         >
                           <Icon size={12} strokeWidth={1.75} className="shrink-0" />
@@ -589,7 +738,7 @@ export function PatchCompliancePage() {
                           : activeCommand.phase === 'running' ? 'Installing…' : 'Waiting for agent…'
                         : command === 'check_updates' ? 'Check for updates' : 'Download and Install'
                       return (
-                        <button type="button" disabled={Boolean(activeCommand)} onClick={() => void runUpdateCommand(d, command)} className="text-[10px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
+                        <button type="button" disabled={Boolean(activeCommand)} onClick={event => { event.stopPropagation(); void runUpdateCommand(d, command) }} className="text-[11px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
                           {label}
                         </button>
                       )
@@ -608,17 +757,17 @@ export function PatchCompliancePage() {
             Showing {filteredDevices.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}–{Math.min(currentPage * pageSize, filteredDevices.length)} of {filteredDevices.length} devices
           </p>
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setCurrentPage(page => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous page" className="flex h-7 w-7 items-center justify-center rounded border border-border text-black dark:text-white transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:opacity-40">
+            <button type="button" onClick={() => setCurrentPage(page => Math.max(1, page - 1))} disabled={currentPage === 1} aria-label="Previous page" className="flex h-7 w-7 items-center justify-center rounded border border-border text-foreground transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:opacity-40">
               <ChevronLeft size={14} strokeWidth={1.75} />
             </button>
-            <span className="min-w-16 text-center text-[12px] font-medium text-black dark:text-white">Page {currentPage} of {totalPages}</span>
-            <button type="button" onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} aria-label="Next page" className="flex h-7 w-7 items-center justify-center rounded border border-border text-black dark:text-white transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:opacity-40">
+            <span className="min-w-16 text-center text-[12px] font-medium text-foreground">Page {currentPage} of {totalPages}</span>
+            <button type="button" onClick={() => setCurrentPage(page => Math.min(totalPages, page + 1))} disabled={currentPage === totalPages} aria-label="Next page" className="flex h-7 w-7 items-center justify-center rounded border border-border text-foreground transition-colors hover:bg-surface-hover disabled:pointer-events-none disabled:opacity-40">
               <ChevronRight size={14} strokeWidth={1.75} />
             </button>
           </div>
         </div>
       </SectionCard>
-       </>
+        </div>
     )}
   </div>
 )
