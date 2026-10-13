@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { format } from 'date-fns'
 import { AlertTriangle, ArrowDownToLine, FileText, Plus, RefreshCw, FileSpreadsheet, ShieldCheck } from 'lucide-react'
 import { devices, complianceChecks, adDomainStatus, detections } from '@/lib/mock-data'
-import { PageHeader } from '@/components/ui/page-header'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { SectionCard } from '@/components/ui/section-card'
 import type { Device, ReportTemplate, Severity } from '@/lib/types'
@@ -791,25 +790,6 @@ export function ReportsPage() {
       {showModal && snapshot && <GenerateModal onClose={() => setShowModal(false)} snapshot={snapshot} initialType={selectedType} />}
 
       <div className="space-y-5">
-        <PageHeader
-          title="Reports"
-          action={
-            <button
-              onClick={() => openGenerateModal()}
-              disabled={!snapshot || loading}
-              className="flex items-center gap-2 rounded-md bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <Plus size={14} strokeWidth={2} />
-              Generate Report
-            </button>
-          }
-        >
-          <div>
-            <h1 className="text-[22px] font-semibold tracking-tight text-foreground">Reports</h1>
-          
-          </div>
-        </PageHeader>
-
         {loadError && (
           <div className={cn(
             'flex items-start gap-2 rounded-md border px-3.5 py-3 text-[12px]',
@@ -830,17 +810,22 @@ export function ReportsPage() {
 
         {metrics && snapshot && (
           <>
-            <section className="rounded-md border border-border bg-card p-4 shadow-card sm:p-5">
-              <div className="mb-4 flex items-center gap-2">
-                
-              </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <KpiCard label="Managed endpoints" value={metrics.endpoints} accentColor="#008080" />
-                <KpiCard label="Average compliance" value={metrics.scoreCoverage ? `${metrics.averageScore}%` : '—'} description={`${metrics.scoreCoverage} of ${metrics.endpoints} scores reported`} accentColor="#5B7FFF" />
-                <KpiCard label="Controls with failures" value={metrics.failingControls} accentColor={metrics.failingControls ? '#F79009' : '#12B76A'} />
-                <KpiCard label="Critical / EOL update risk" value={metrics.updateRisk} description={`${metrics.updateCoverage} of ${metrics.endpoints} endpoints reported update data`} accentColor={metrics.updateRisk ? '#F04438' : '#12B76A'} />
-              </div>
-            </section>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <KpiCard label="Managed endpoints" value={metrics.endpoints} accentColor="#008080" />
+              <KpiCard label="Average compliance" value={metrics.scoreCoverage ? `${metrics.averageScore}%` : '—'} description={`${metrics.scoreCoverage} of ${metrics.endpoints} scores reported`} accentColor="#5B7FFF" />
+              <KpiCard label="Controls with failures" value={metrics.failingControls} accentColor={metrics.failingControls ? '#F79009' : '#12B76A'} />
+              <KpiCard label="Critical / EOL update risk" value={metrics.updateRisk} description={`${metrics.updateCoverage} of ${metrics.endpoints} endpoints reported update data`} accentColor={metrics.updateRisk ? '#F04438' : '#12B76A'} />
+            </div>
+            <div className="flex justify-end">
+              <button
+                onClick={() => openGenerateModal()}
+                disabled={!snapshot || loading}
+                className="flex items-center gap-2 rounded-md bg-brand px-3.5 py-2 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Plus size={14} strokeWidth={2} />
+                Generate Report
+              </button>
+            </div>
 
             <SectionCard title="Priority findings">
               <div className="divide-y divide-border">
