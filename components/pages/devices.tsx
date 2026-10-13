@@ -1,10 +1,10 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { formatDistanceToNow, format } from 'date-fns'
 import { Search, X, ChevronDown, ChevronLeft, ChevronRight, Laptop, CheckCircle2, XCircle, RefreshCw, Info, Megaphone, PauseCircle, History, Check, Shield, ShieldCheck, ShieldAlert, Lock, Bug, Activity, User, Plus, Loader2, AlertTriangle, Play, Pencil, Trash2 } from 'lucide-react'
 import { Gauge } from '@mui/x-charts/Gauge'
-import { getDevices, getDeviceChecks, getDeviceProtectionHistory, getDeviceScanHistory, queueUpdateCommand, waitForDeviceCommand, cancelDeviceCommand, updateDevice as updateDeviceApi, deleteDevice as deleteDeviceApi, provisionDevice as provisionDeviceApi, type DeviceCheck, type DeviceProtectionHistory, type DeviceScanHistory, type ManagedDevice } from '@/lib/api-client'
+import { getDevices, getDeviceChecks, getDeviceProtectionHistory, getDeviceScanHistory, getDeviceCommandStatus, queueUpdateCommand, waitForDeviceCommand, cancelDeviceCommand, updateDevice as updateDeviceApi, deleteDevice as deleteDeviceApi, provisionDevice as provisionDeviceApi, type DeviceCheck, type DeviceProtectionHistory, type DeviceScanHistory, type ManagedDevice } from '@/lib/api-client'
 import { devices as demoDevices } from '@/lib/mock-data'
 import { useDataMode } from '@/lib/data-mode-provider'
 import { PageHeader } from '@/components/ui/page-header'
@@ -17,6 +17,12 @@ import { cn } from '@/lib/utils'
 const OS_OPTIONS: OS[] = ['Windows', 'Mac', 'Linux']
 const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
 const PAGE_SIZE = 10
+const UPDATE_INVENTORY_STALE_AFTER_MS = 60 * 60 * 1000
+
+function isUpdateInventoryStale(lastUpdateCheck: string, scanStatus?: Device['patchStatus']['updateScanStatus']) {
+  const checkedAt = Date.parse(lastUpdateCheck)
+  return (scanStatus !== undefined && scanStatus !== 'succeeded') || !Number.isFinite(checkedAt) || Date.now() - checkedAt > UPDATE_INVENTORY_STALE_AFTER_MS
+}
 
 function managedDeviceToDevice(managedDevice: ManagedDevice): Device {
   const lastSeen = managedDevice.last_checkin ?? managedDevice.created_at
@@ -62,7 +68,9 @@ function managedDeviceToDevice(managedDevice: ManagedDevice): Device {
       missingCritical: managedDevice.patch_status?.missing_critical ?? 0,
       missingTotal: managedDevice.patch_status?.missing_total ?? 0,
       pendingReboot: managedDevice.patch_status?.pending_reboot ?? false,
-      lastUpdateCheck: managedDevice.patch_status?.last_update_check ?? lastSeen,
+      lastUpdateCheck: managedDevice.patch_status?.last_update_check ?? '',
+      updateScanStatus: managedDevice.patch_status?.update_scan_status ?? 'unknown',
+      updateScanError: managedDevice.patch_status?.update_scan_error,
       osEol: managedDevice.patch_status?.os_eol ?? false,
       updateHistory: managedDevice.update_history,
       updatesAutomatic: managedDevice.updates_automatic,
@@ -221,7 +229,7 @@ function getUpdateOptions(device: Device): UpdateOptions {
       providerLabel: 'Windows Update',
       autoUpdate: {
         label: 'Get the latest updates as soon as they\u2019re available',
-        description: 'Be among the first to get non-security updates, fixes, and improvements as they roll out.',
+        description: 'Control whether Windows prioritizes non-security updates, fixes, and improvements as they roll out.',
       },
       pause: {
         kind: 'date',
@@ -326,6 +334,11 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
   const [protectionHistoryLoading, setProtectionHistoryLoading] = useState(false)
   const [protectionHistoryOpen, setProtectionHistoryOpen] = useState(false)
   const [expandedProtectionId, setExpandedProtectionId] = useState<string | null>(null)
+  const onRefreshRef = useRef(onRefresh)
+
+  useEffect(() => {
+    onRefreshRef.current = onRefresh
+  }, [onRefresh])
 
   useEffect(() => {
     setChecksLoading(true)
@@ -336,26 +349,88 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
   }, [device.id])
 
   useEffect(() => {
+    let cancelled = false
+    let trackingUpdateCommand = false
+    const refreshCommandStatus = async () => {
+      try {
+        const status = await getDeviceCommandStatus(device.id)
+        if (cancelled) return
+        const isUpdateCommand = status.command === 'check_updates' || status.command === 'install_updates'
+        const isActive = status.status === 'queued' || status.status === 'running'
+        if (isUpdateCommand && isActive) {
+          trackingUpdateCommand = true
+          setActiveCommandId(status.command_id)
+          setUpdateAction(status.command)
+          setCommandMessage(status.status === 'running' ? 'Update command is running on the endpoint…' : 'Update command is queued for the endpoint agent…')
+        } else if (trackingUpdateCommand) {
+          trackingUpdateCommand = false
+          setActiveCommandId(null)
+          setUpdateAction(null)
+          setCommandMessage(status.result || (status.status === 'succeeded' ? 'Update command completed.' : 'Update command did not complete.'))
+          if (status.status === 'succeeded') await onRefreshRef.current()
+        }
+      } catch {}
+    }
+
+    void refreshCommandStatus()
+    const interval = window.setInterval(() => void refreshCommandStatus(), 3000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [device.id])
+
+  useEffect(() => {
     setAutoUpdateEnabled(device.patchStatus.updatesAutomatic ?? false)
-    setPauseDate(device.patchStatus.updatesPauseUntil?.slice(0, 10) ?? '')
+    const pauseUntil = Date.parse(device.patchStatus.updatesPauseUntil ?? '')
+    setPauseDate(Number.isFinite(pauseUntil) && pauseUntil > Date.now() ? format(new Date(pauseUntil), 'yyyy-MM-dd') : '')
   }, [device.id, device.patchStatus.updatesAutomatic, device.patchStatus.updatesPauseUntil])
 
   const checkSeverity: Record<string, 'critical' | 'warning' | 'info'> = {
-    'chk-001': 'critical', 'chk-002': 'warning', 'chk-004': 'warning', 'chk-007': 'warning',
-    'chk-008': 'critical', 'chk-010': 'critical', 'chk-011': 'critical', 'chk-012': 'warning',
-    'chk-014': 'critical', 'chk-015': 'critical', 'chk-016': 'warning', 'chk-017': 'warning',
-    'chk-020': 'critical', 'chk-021': 'warning',
+    'chk-001': 'critical',
+    'chk-002': 'warning',
+    'chk-003': 'critical',
+    'chk-004': 'warning',
+    'chk-005': 'critical',
+    'chk-006': 'warning',
+    'chk-007': 'warning',
+    'chk-008': 'critical',
+    'chk-009': 'warning',
+    'chk-010': 'critical',
+    'chk-011': 'critical',
+    'chk-012': 'warning',
+    'chk-013': 'critical',
+    'chk-014': 'critical',
+    'chk-015': 'critical',
+    'chk-016': 'warning',
+    'chk-017': 'warning',
+    'chk-018': 'warning',
+    'chk-019': 'warning',
+    'chk-020': 'critical',
+    'chk-021': 'warning',
+    'chk-022': 'warning',
+    'chk-023': 'warning',
+    'chk-024': 'warning',
+    'chk-025': 'warning',
+    'chk-026': 'warning',
+    'chk-027': 'critical',
+    'chk-028': 'warning',
   }
   const defColor = getDefinitionAgeColor(device.malwareStatus.definitionAge)
+  const updateInventoryStale = isUpdateInventoryStale(device.patchStatus.lastUpdateCheck, device.patchStatus.updateScanStatus)
   const updateState = device.patchStatus.osEol
     ? { label: 'End of support', color: STATUS_COLORS.critical }
+    : device.patchStatus.updateScanStatus === 'failed'
+    ? { label: 'Update scan failed', color: STATUS_COLORS.critical }
+    : updateInventoryStale
+    ? { label: 'Inventory stale', color: 'var(--muted-foreground)' }
     : device.patchStatus.pendingReboot
     ? { label: 'Restart required', color: STATUS_COLORS.warning }
     : device.patchStatus.missingCritical > 0
     ? { label: 'Security updates missing', color: STATUS_COLORS.critical }
     : device.patchStatus.missingTotal > 0
     ? { label: 'Updates available', color: STATUS_COLORS.warning }
-    : { label: 'Up to date', color: 'var(--status-good)' }
+    : { label: "You're up to date", color: 'var(--status-good)' }
   const sendUpdateCommand = async (command: string, pauseUntil?: string) => {
     setUpdateAction(command)
     setCommandMessage(null)
@@ -368,7 +443,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
       }
       setCommandMessage('Command queued. Waiting for the endpoint agent to start…')
       const executionTimeout = command === 'install_updates'
-        ? 60 * 60 * 1000
+        ? 2 * 60 * 60 * 1000
         : command === 'quick_scan'
         ? 2 * 60 * 60 * 1000
         : command === 'check_updates' || command === 'check'
@@ -656,28 +731,35 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
             <div className="space-y-4">
               {commandMessage && <p className="text-[12px] text-muted-foreground">{commandMessage}</p>}
               {(() => {
-                const hasMissing = device.patchStatus.missingTotal > 0
-                const isUpToDate = updateState.label === 'Up to date'
+                const hasMissing = !updateInventoryStale && device.patchStatus.missingTotal > 0
+                const isUpToDate = updateState.label === "You're up to date"
                 const missingLabel = `${device.patchStatus.missingTotal} update${device.patchStatus.missingTotal === 1 ? '' : 's'}`
                 const updateOptions = getUpdateOptions(device)
+                const checkedAt = Date.parse(device.patchStatus.lastUpdateCheck)
+                const lastCheckedLabel = Number.isFinite(checkedAt) ? formatDistanceToNow(new Date(checkedAt), { addSuffix: true }) : 'never'
+                const pauseUntil = Date.parse(device.patchStatus.updatesPauseUntil ?? '')
+                const updatesPaused = Number.isFinite(pauseUntil) && pauseUntil > Date.now()
+                const pauseUntilLabel = updatesPaused ? format(new Date(pauseUntil), 'MMM d, yyyy') : ''
 
                 return (
                   <>
                     {/* Status card */}
                     <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4">
                       <div className="flex items-center gap-3.5">
-                        <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${updateState.color}1f` }}>
-                          <RefreshCw size={18} strokeWidth={2} style={{ color: updateState.color }} />
-                          {isUpToDate && (
+                        <span className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: `${updatesPaused ? STATUS_COLORS.warning : updateState.color}1f` }}>
+                          {updatesPaused
+                            ? <PauseCircle size={18} strokeWidth={2} style={{ color: STATUS_COLORS.warning }} />
+                            : <RefreshCw size={18} strokeWidth={2} style={{ color: updateState.color }} />}
+                          {isUpToDate && !updatesPaused && (
                             <span className="absolute -bottom-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full ring-2 ring-surface" style={{ backgroundColor: 'var(--status-good)' }}>
                               <Check size={10} strokeWidth={3} className="text-white" />
                             </span>
                           )}
                         </span>
                         <div>
-                          <p className="text-[14px] font-semibold text-foreground">{updateState.label}</p>
+                          <p className="text-[14px] font-semibold text-foreground">{updatesPaused ? `Paused until ${pauseUntilLabel}` : updateState.label}</p>
                           <p className="mt-0.5 text-[12px] text-muted-foreground">
-                            {updateOptions.providerLabel} · Last checked {formatDistanceToNow(new Date(device.patchStatus.lastUpdateCheck), { addSuffix: true })}
+                            {updateOptions.providerLabel} · Last inventory scan {lastCheckedLabel}
                           </p>
                         </div>
                       </div>
@@ -690,6 +772,16 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                         {updateAction === 'check_updates' ? <span className="inline-flex items-center gap-1.5"><Loader2 size={13} className="animate-spin" />Running…</span> : 'Check for updates'}
                       </button>
                     </div>
+
+                    {device.patchStatus.updateScanStatus === 'failed' ? (
+                      <div className="rounded-md border border-status-critical/30 bg-status-critical/5 px-4 py-3 text-[12px] text-status-critical">
+                        Update scan failed{device.patchStatus.updateScanError ? `: ${device.patchStatus.updateScanError}` : '.'}
+                      </div>
+                    ) : updateInventoryStale ? (
+                      <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-muted-foreground">
+                        Available updates are unverified until this endpoint completes a fresh update scan.
+                      </div>
+                    ) : null}
 
                     {/* Available update banner */}
                     {hasMissing && updateBannerOpen && (
@@ -745,16 +837,28 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                             </div>
                           </div>
                           <div className="flex shrink-0 items-center gap-2">
-                          <input type="date" value={pauseDate} min={new Date().toISOString().slice(0, 10)} onChange={event => setPauseDate(event.target.value)} className="h-7 rounded border border-border bg-card px-2 text-[11px] text-foreground" />
-                          <button
-                            type="button"
-                            disabled={!pauseDate || updateAction === 'pause'}
-                            onClick={() => pauseDate && void sendUpdateCommand('pause', `${pauseDate}T23:59:59Z`)}
-                            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-black dark:text-white transition-colors hover:bg-surface-hover"
-                          >
-                            {updateAction === 'pause' ? <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Applying…</span> : updateOptions.pause.actionLabel}
-                          </button>
-                          {device.patchStatus.updatesPauseUntil && <button type="button" onClick={() => void sendUpdateCommand('resume')} className="rounded-md px-2 py-1 text-[11px] text-brand hover:bg-surface-hover">Resume</button>}
+                            {updatesPaused ? (
+                              <button
+                                type="button"
+                                disabled={updateAction === 'resume'}
+                                onClick={() => void sendUpdateCommand('resume')}
+                                className="shrink-0 rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-black dark:text-white transition-colors hover:bg-surface-hover disabled:opacity-50"
+                              >
+                                {updateAction === 'resume' ? <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Resuming…</span> : 'Resume Update'}
+                              </button>
+                            ) : (
+                              <>
+                                <input type="date" value={pauseDate} min={format(new Date(), 'yyyy-MM-dd')} onChange={event => setPauseDate(event.target.value)} className="h-7 rounded border border-border bg-card px-2 text-[11px] text-foreground" />
+                                <button
+                                  type="button"
+                                  disabled={!pauseDate || updateAction === 'pause'}
+                                  onClick={() => pauseDate && void sendUpdateCommand('pause', new Date(`${pauseDate}T23:59:59`).toISOString())}
+                                  className="shrink-0 rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-black dark:text-white transition-colors hover:bg-surface-hover disabled:opacity-50"
+                                >
+                                  {updateAction === 'pause' ? <span className="inline-flex items-center gap-1"><Loader2 size={12} className="animate-spin" />Applying…</span> : updateOptions.pause.actionLabel}
+                                </button>
+                              </>
+                            )}
                           </div>
                         </div>
 
@@ -775,7 +879,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
 
                     <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       <RefreshCw size={12} strokeWidth={1.75} className="shrink-0" />
-                      Last full update inventory check: {format(new Date(device.patchStatus.lastUpdateCheck), 'MMM d, yyyy HH:mm')}
+                      Last full update inventory check: {Number.isFinite(checkedAt) ? format(new Date(checkedAt), 'MMM d, yyyy HH:mm') : 'Never'}
                     </p>
                   </>
                 )
@@ -1197,7 +1301,7 @@ export function DevicesPage() {
                   { label: 'Last Seen', align: 'left', sortable: false },
                   { label: 'Actions', align: 'left', sortable: false },
                 ].map(h => (
-                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Status' && 'pl-8')}>
+                  <th key={h.label} className={cn('px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-foreground', h.align === 'right' ? 'text-right' : 'text-left', h.label === 'Status' && 'pl-0')}>
                     {h.label}
                   </th>
                 ))}
@@ -1233,7 +1337,7 @@ export function DevicesPage() {
                     <td className="px-3 align-middle">
                       <StatusIndicator status={scoreToSeverity(d.complianceScore)} className="gap-1.5" />
                     </td>
-                    <td className="px-3 pl-8">
+                    <td className="px-3 pl-0">
                       <ReportingStatusIndicator lastSeen={d.lastSeen} />
                     </td>
                     <td className="whitespace-nowrap px-3"><span className="text-[12px] font-medium text-black dark:text-white">{hydrated ? formatDistanceToNow(new Date(d.lastSeen), { addSuffix: true }) : '—'}</span></td>

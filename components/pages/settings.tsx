@@ -1,7 +1,7 @@
 'use client'
 
 import { FormEvent, useEffect, useState } from 'react'
-import { Settings, Bell, Shield, Key, Save, Eye, EyeOff, UserCircle, LogOut, Plus, Trash2 } from 'lucide-react'
+import { Settings, Bell, Shield, Key, Save, UserCircle, LogOut, Plus, Trash2, Copy, Check } from 'lucide-react'
 import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { Button } from '@/components/ui/button'
@@ -19,21 +19,87 @@ const SECTIONS: { id: Section; label: string; icon: typeof Settings }[] = [
   { id: 'api', label: 'API & Tokens', icon: Key },
 ]
 
+/* ---------- Shared styles (one source of truth for controls) ---------- */
+
+const inputBase =
+  'h-9 rounded-md border border-border bg-surface px-3 text-[13px] text-foreground placeholder:text-muted-foreground transition-colors focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/20'
+
+const primaryBtn =
+  'inline-flex h-9 items-center justify-center gap-1.5 rounded-md bg-brand px-3.5 text-[13px] font-medium text-white transition-colors hover:bg-brand/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 disabled:cursor-not-allowed disabled:opacity-50'
+
+const iconBtn =
+  'flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-surface-hover hover:text-status-critical focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40'
+
+/* ---------- Building blocks ---------- */
+
+async function copyToClipboard(text: string) {
+  try {
+    await navigator.clipboard.writeText(text)
+    return true
+  } catch {
+    // Fallback for non-secure contexts (e.g. http on a LAN address)
+    try {
+      const el = document.createElement('textarea')
+      el.value = text
+      el.style.position = 'fixed'
+      el.style.opacity = '0'
+      document.body.appendChild(el)
+      el.select()
+      const ok = document.execCommand('copy')
+      document.body.removeChild(el)
+      return ok
+    } catch {
+      return false
+    }
+  }
+}
+
+function CopyButton({ value, label, ariaLabel }: { value: string; label?: string; ariaLabel: string }) {
+  const [copied, setCopied] = useState(false)
+
+  async function handleCopy() {
+    if (await copyToClipboard(value)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    }
+  }
+
+  const Icon = copied ? Check : Copy
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={ariaLabel}
+      className={cn(
+        label
+          ? 'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium'
+          : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-md',
+        'transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+        copied ? 'text-status-good' : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'
+      )}
+    >
+      <Icon size={14} strokeWidth={1.75} />
+      {label && (copied ? 'Copied' : label)}
+    </button>
+  )
+}
+
 function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        'w-9 h-5 rounded-full transition-colors relative shrink-0',
-        checked ? 'bg-brand' : 'bg-surface-hover border border-border'
+        'relative h-5 w-9 shrink-0 rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
+        checked ? 'border-brand bg-brand' : 'border-border bg-surface-hover'
       )}
     >
       <span
         className={cn(
-          'absolute top-0.5 w-4 h-4 rounded-full bg-white transition-all shadow-sm',
-          checked ? 'left-[18px]' : 'left-0.5'
+          'absolute left-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform',
+          checked ? 'translate-x-[18px]' : 'translate-x-0'
         )}
       />
     </button>
@@ -43,19 +109,26 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
 function SettingRow({
   label,
   description,
+  indent,
   children,
 }: {
   label: string
   description?: string
+  indent?: boolean
   children: React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 py-4 border-b border-border last:border-0">
-      <div className="flex-1 min-w-0">
+    <div
+      className={cn(
+        'flex flex-col gap-3 border-b border-border py-4 last:border-0 sm:flex-row sm:items-center sm:justify-between sm:gap-6',
+        indent && 'pl-4'
+      )}
+    >
+      <div className="min-w-0 flex-1">
         <p className="text-[13px] font-medium text-foreground">{label}</p>
-        {description && <p className="text-[12px] text-muted-foreground mt-0.5">{description}</p>}
+        {description && <p className="mt-0.5 text-[12px] leading-relaxed text-muted-foreground">{description}</p>}
       </div>
-      <div className="shrink-0">{children}</div>
+      <div className="sm:shrink-0">{children}</div>
     </div>
   )
 }
@@ -77,10 +150,101 @@ function TextField({
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
-      className="h-8 bg-surface border border-border rounded-md px-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors w-64"
+      className={cn(inputBase, 'w-full sm:w-64')}
     />
   )
 }
+
+function CredentialPanel({
+  title,
+  description,
+  error,
+  loading,
+  loadingText,
+  emptyText,
+  isEmpty,
+  inputValue,
+  onInputChange,
+  inputPlaceholder,
+  onCreate,
+  children,
+}: {
+  title: string
+  description: string
+  error: string | null
+  loading: boolean
+  loadingText: string
+  emptyText: string
+  isEmpty: boolean
+  inputValue: string
+  onInputChange: (v: string) => void
+  inputPlaceholder: string
+  onCreate: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <section className="space-y-3">
+      <div>
+        <h3 className="text-[13px] font-semibold text-foreground">{title}</h3>
+        <p className="mt-0.5 max-w-prose text-[12px] leading-relaxed text-muted-foreground">{description}</p>
+      </div>
+
+      {error && (
+        <p role="alert" className="text-[12px] text-status-critical">
+          {error}
+        </p>
+      )}
+
+      <div className="divide-y divide-border overflow-hidden rounded-md border border-border">
+        {loading && <p className="px-3 py-3 text-[12px] text-muted-foreground">{loadingText}</p>}
+        {!loading && isEmpty && <p className="px-3 py-4 text-[12px] text-muted-foreground">{emptyText}</p>}
+        {children}
+      </div>
+
+      <div className="flex items-center gap-2">
+        <input
+          type="text"
+          value={inputValue}
+          onChange={e => onInputChange(e.target.value)}
+          placeholder={inputPlaceholder}
+          className={cn(inputBase, 'min-w-0 flex-1')}
+        />
+        <button type="button" onClick={onCreate} disabled={!inputValue.trim()} className={primaryBtn}>
+          <Plus size={14} strokeWidth={1.75} />
+          Create
+        </button>
+      </div>
+    </section>
+  )
+}
+
+function CredentialRow({
+  onDelete,
+  deleteLabel,
+  copyValue,
+  copyLabel,
+  children,
+}: {
+  onDelete: () => void
+  deleteLabel: string
+  copyValue?: string
+  copyLabel?: string
+  children: React.ReactNode
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 px-3 py-3">
+      <div className="min-w-0 flex-1">{children}</div>
+      <div className="flex shrink-0 items-center">
+        {copyValue && <CopyButton value={copyValue} ariaLabel={copyLabel ?? 'Copy'} />}
+        <button type="button" onClick={onDelete} className={iconBtn} aria-label={deleteLabel}>
+          <Trash2 size={14} strokeWidth={1.5} />
+        </button>
+      </div>
+    </div>
+  )
+}
+
+/* ---------- Page ---------- */
 
 export function SettingsPage() {
   const [section, setSection] = useState<Section>('account')
@@ -186,36 +350,39 @@ export function SettingsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       <PageHeader title="Settings" description="Manage your Fleet Compliance platform configuration." />
 
-      <div className="flex gap-4">
-        {/* Sidebar nav */}
-        <div className="w-48 shrink-0">
-          <nav className="bg-card border border-border rounded-md shadow-sm p-1.5 space-y-0.5">
-            {SECTIONS.map(({ id, label, icon: Icon }) => (
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:gap-6">
+        {/* Section nav: horizontal tabs on small screens, sticky sidebar on md+ */}
+        <nav
+          aria-label="Settings sections"
+          className="flex gap-1 overflow-x-auto rounded-md border border-border bg-card p-1.5 shadow-sm md:sticky md:top-4 md:w-56 md:shrink-0 md:flex-col md:overflow-visible"
+        >
+          {SECTIONS.map(({ id, label, icon: Icon }) => {
+            const active = section === id
+            return (
               <button
                 key={id}
+                type="button"
                 onClick={() => setSection(id)}
+                aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'w-full flex items-center gap-2.5 px-3 py-2 rounded-md text-[13px] transition-colors text-left relative',
-                  section === id
-                    ? 'bg-surface-hover text-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground hover:bg-surface-hover'
+                  'flex shrink-0 items-center gap-2.5 whitespace-nowrap rounded-md px-3 py-2 text-left text-[13px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40 md:w-full',
+                  active
+                    ? 'bg-surface-hover font-medium text-foreground'
+                    : 'text-muted-foreground hover:bg-surface-hover hover:text-foreground'
                 )}
               >
-                {section === id && (
-                  <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 rounded-r bg-brand" />
-                )}
-                <Icon size={15} strokeWidth={1.5} className={cn(section === id ? 'text-brand' : 'text-muted-foreground')} />
+                <Icon size={15} strokeWidth={1.5} className={active ? 'text-brand' : 'text-muted-foreground'} />
                 {label}
               </button>
-            ))}
-          </nav>
-        </div>
+            )
+          })}
+        </nav>
 
         {/* Content */}
-        <div className="flex-1 min-w-0 space-y-4">
+        <div className="min-w-0 flex-1 space-y-4">
           {section === 'account' && <AccountSection />}
 
           {section === 'general' && (
@@ -227,7 +394,7 @@ export function SettingsPage() {
                 <select
                   value={timezone}
                   onChange={e => setTimezone(e.target.value)}
-                  className="h-8 bg-surface border border-border rounded-md px-3 text-[13px] text-foreground focus:outline-none focus:border-brand/60 transition-colors w-64"
+                  className={cn(inputBase, 'w-full sm:w-64')}
                 >
                   {['UTC-8 (Pacific Time)', 'UTC-7 (Mountain Time)', 'UTC-6 (Central Time)', 'UTC-5 (Eastern Time)', 'UTC+0 (UTC)', 'UTC+1 (CET)'].map(tz => (
                     <option key={tz} value={tz}>{tz}</option>
@@ -246,7 +413,7 @@ export function SettingsPage() {
                 <Toggle checked={emailAlerts} onChange={setEmailAlerts} />
               </SettingRow>
               {emailAlerts && (
-                <SettingRow label="Alert Email Address" description="Destination for critical and warning alerts.">
+                <SettingRow indent label="Alert Email Address" description="Destination for critical and warning alerts.">
                   <TextField value={alertEmail} onChange={setAlertEmail} placeholder="security@company.com" type="email" />
                 </SettingRow>
               )}
@@ -285,107 +452,69 @@ export function SettingsPage() {
           {section === 'api' && (
             <SectionCard title="API & Integration Tokens">
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-[13px] font-semibold text-foreground mb-2">API Keys</h3>
-                  <p className="text-[12px] text-muted-foreground mb-3">
-                    Use these keys to authenticate platform integrations and external tools.
-                  </p>
-                  {keyError && <p className="text-[12px] text-status-critical mb-2">{keyError}</p>}
-                  <div className="space-y-2 mb-3">
-                    {loadingKeys && <p className="text-[12px] text-muted-foreground">Loading API keys...</p>}
-                    {!loadingKeys && apiKeys.length === 0 && (
-                      <p className="text-[12px] text-muted-foreground">No API keys yet.</p>
-                    )}
-                    {apiKeys.map(key => (
-                      <div key={key.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-medium text-foreground truncate">{key.name}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {key.key_prefix}•••••••• •••••
-                            {key.expires_at ? ` • Expires ${new Date(key.expires_at).toLocaleDateString()}` : ' • No expiry'}
-                          </p>
-                          {key.raw_key && <p className="mt-1 break-all font-mono text-[11px] text-status-warning">Copy now: {key.raw_key}</p>}
+                <CredentialPanel
+                  title="API Keys"
+                  description="Use these keys to authenticate platform integrations and external tools."
+                  error={keyError}
+                  loading={loadingKeys}
+                  loadingText="Loading API keys..."
+                  emptyText="No API keys yet."
+                  isEmpty={apiKeys.length === 0}
+                  inputValue={newKeyName}
+                  onInputChange={setNewKeyName}
+                  inputPlaceholder="New API key name"
+                  onCreate={handleCreateApiKey}
+                >
+                  {apiKeys.map(key => (
+                    <CredentialRow key={key.id} onDelete={() => handleDeleteApiKey(key.id)} deleteLabel="Delete API key">
+                      <p className="truncate text-[13px] font-medium text-foreground">{key.name}</p>
+                      <p className="mt-0.5 text-[12px] text-muted-foreground">
+                        {key.key_prefix}•••••••• •••••
+                        {key.expires_at ? ` • Expires ${new Date(key.expires_at).toLocaleDateString()}` : ' • No expiry'}
+                      </p>
+                      {key.raw_key && (
+                        <div className="mt-2.5 rounded-md bg-status-warning/10 p-2.5">
+                          <div className="flex items-center gap-2">
+                            <code className="min-w-0 flex-1 break-all font-mono text-[11px] text-foreground">{key.raw_key}</code>
+                            <CopyButton value={key.raw_key} label="Copy" ariaLabel="Copy API key" />
+                          </div>
+                          <p className="mt-1.5 text-[11px] text-status-warning">Copy this key now. It won't be shown again.</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteApiKey(key.id)}
-                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground hover:text-status-critical transition-colors"
-                          aria-label="Delete API key"
-                        >
-                          <Trash2 size={13} strokeWidth={1.5} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newKeyName}
-                      onChange={e => setNewKeyName(e.target.value)}
-                      placeholder="New API key name"
-                      className="h-8 flex-1 bg-surface border border-border rounded-md px-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCreateApiKey}
-                      disabled={!newKeyName.trim()}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-md text-[12px] font-medium hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plus size={13} strokeWidth={1.5} />
-                      Create
-                    </button>
-                  </div>
-                </div>
+                      )}
+                    </CredentialRow>
+                  ))}
+                </CredentialPanel>
 
-                <div>
-                  <h3 className="text-[13px] font-semibold text-foreground mb-2">Enrollment Tokens</h3>
-                  <p className="text-[12px] text-muted-foreground mb-3">
-                    One-time tokens used by the endpoint executable to enroll into this fleet. The executable prompts for this token and it cannot be reused.
-                  </p>
-                  {tokenError && <p className="text-[12px] text-status-critical mb-2">{tokenError}</p>}
-                  <div className="space-y-2 mb-3">
-                    {loadingTokens && <p className="text-[12px] text-muted-foreground">Loading enrollment tokens...</p>}
-                    {!loadingTokens && enrollmentTokens.length === 0 && (
-                      <p className="text-[12px] text-muted-foreground">No enrollment tokens yet.</p>
-                    )}
+                <div className="border-t border-border pt-6">
+                  <CredentialPanel
+                    title="Enrollment Tokens"
+                    description="One-time tokens used by the endpoint executable to enroll into this fleet. The executable prompts for this token and it cannot be reused."
+                    error={tokenError}
+                    loading={loadingTokens}
+                    loadingText="Loading enrollment tokens..."
+                    emptyText="No enrollment tokens yet."
+                    isEmpty={enrollmentTokens.length === 0}
+                    inputValue={newTokenDescription}
+                    onInputChange={setNewTokenDescription}
+                    inputPlaceholder="New enrollment token description"
+                    onCreate={handleCreateEnrollmentToken}
+                  >
                     {enrollmentTokens.map(token => (
-                      <div key={token.id} className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2">
-                        <div className="min-w-0">
-                          <p className="text-[12px] font-mono text-foreground truncate">{token.token}</p>
-                          <p className="text-[11px] text-muted-foreground">
-                            {token.description || 'No description'}
-                            {token.expires_at ? ` • Expires ${new Date(token.expires_at).toLocaleDateString()}` : ' • No expiry'}
-                          </p>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteEnrollmentToken(token.id)}
-                          className="shrink-0 w-7 h-7 flex items-center justify-center rounded hover:bg-surface-hover text-muted-foreground hover:text-status-critical transition-colors"
-                          aria-label="Delete enrollment token"
-                        >
-                          <Trash2 size={13} strokeWidth={1.5} />
-                        </button>
-                      </div>
+                      <CredentialRow
+                        key={token.id}
+                        onDelete={() => handleDeleteEnrollmentToken(token.id)}
+                        deleteLabel="Delete enrollment token"
+                        copyValue={token.token}
+                        copyLabel="Copy enrollment token"
+                      >
+                        <p className="truncate font-mono text-[12px] text-foreground">{token.token}</p>
+                        <p className="mt-0.5 text-[12px] text-muted-foreground">
+                          {token.description || 'No description'}
+                          {token.expires_at ? ` • Expires ${new Date(token.expires_at).toLocaleDateString()}` : ' • No expiry'}
+                        </p>
+                      </CredentialRow>
                     ))}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      value={newTokenDescription}
-                      onChange={e => setNewTokenDescription(e.target.value)}
-                      placeholder="New enrollment token description"
-                      className="h-8 flex-1 bg-surface border border-border rounded-md px-3 text-[13px] text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-brand/60 transition-colors"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCreateEnrollmentToken}
-                      disabled={!newTokenDescription.trim()}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-brand text-white rounded-md text-[12px] font-medium hover:bg-brand/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <Plus size={13} strokeWidth={1.5} />
-                      Create
-                    </button>
-                  </div>
+                  </CredentialPanel>
                 </div>
               </div>
             </SectionCard>
@@ -395,11 +524,12 @@ export function SettingsPage() {
           {section !== 'account' && (
             <div className="flex justify-end">
               <button
+                type="button"
                 onClick={handleSave}
                 className={cn(
-                  'flex items-center gap-2 px-4 py-2 rounded-md text-[13px] font-medium transition-all',
+                  'inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                   saved
-                    ? 'bg-[#008080]/20 text-[#008080] border border-[#008080]/30'
+                    ? 'border border-status-good/30 bg-status-good/10 text-status-good'
                     : 'bg-brand text-white hover:bg-brand/90'
                 )}
               >
@@ -413,6 +543,8 @@ export function SettingsPage() {
     </div>
   )
 }
+
+/* ---------- Account ---------- */
 
 function AccountSection() {
   const { admin, logout, login } = useAuth()
@@ -437,7 +569,7 @@ function AccountSection() {
 
     return (
       <SectionCard title="Account" description="Sign in with your administrator account.">
-        <form onSubmit={handleSignIn} className="max-w-sm space-y-3.5 py-2">
+        <form onSubmit={handleSignIn} className="max-w-sm space-y-4 py-2">
           <label className="block text-[12px] font-medium text-foreground">
             Email
             <input
@@ -445,7 +577,7 @@ function AccountSection() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               required
-              className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className={cn(inputBase, 'mt-1.5 w-full')}
             />
           </label>
           <label className="block text-[12px] font-medium text-foreground">
@@ -456,11 +588,11 @@ function AccountSection() {
               onChange={e => setPassword(e.target.value)}
               required
               minLength={8}
-              className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-3 text-[13px] text-foreground outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+              className={cn(inputBase, 'mt-1.5 w-full')}
             />
           </label>
-          {error && <p className="text-[12px] text-status-critical">{error}</p>}
-          <Button type="submit" disabled={submitting}>{submitting ? 'Signing in...' : 'Sign in'}</Button>
+          {error && <p role="alert" className="text-[12px] text-status-critical">{error}</p>}
+          <Button type="submit" disabled={submitting} className="w-full">{submitting ? 'Signing in...' : 'Sign in'}</Button>
         </form>
       </SectionCard>
     )
@@ -468,12 +600,12 @@ function AccountSection() {
 
   return (
     <SectionCard title="Account" description="Your administrator profile for this local installation.">
-      <div className="flex items-center gap-3 py-3">
+      <div className="flex items-center gap-3 border-b border-border pb-4">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand/10 text-brand">
           <UserCircle size={24} strokeWidth={1.5} />
         </div>
         <div className="min-w-0">
-          <p className="truncate text-[13px] font-semibold text-foreground">{admin.name}</p>
+          <p className="truncate text-[14px] font-semibold text-foreground">{admin.name}</p>
           <p className="truncate text-[12px] text-muted-foreground">{admin.email}</p>
         </div>
       </div>
@@ -484,16 +616,16 @@ function AccountSection() {
       <SettingRow label="Last login" description="Most recent successful sign-in.">
         <span className="text-[12px] text-muted-foreground">{admin.last_login ? new Date(admin.last_login).toLocaleString() : '—'}</span>
       </SettingRow>
-
-      <div className="pt-3">
+      <SettingRow label="Sign out" description="End your session on this browser.">
         <button
+          type="button"
           onClick={logout}
-          className="flex items-center gap-2 rounded-md border border-status-critical/30 bg-status-criticalBg/40 px-3 py-1.5 text-[13px] font-medium text-status-critical transition-colors hover:bg-status-criticalBg/60"
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-[13px] font-medium text-status-critical transition-colors hover:bg-status-criticalBg/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-status-critical/30"
         >
           <LogOut size={14} strokeWidth={2} />
           Sign out
         </button>
-      </div>
+      </SettingRow>
     </SectionCard>
   )
 }

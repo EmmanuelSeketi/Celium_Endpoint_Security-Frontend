@@ -20,10 +20,34 @@ const CATEGORY_LABELS: Record<CheckCategory, string> = {
 }
 const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABELS) as [CheckCategory, string][]
 const LIVE_CHECK_SEVERITY: Record<string, Severity> = {
-  'chk-001': 'critical', 'chk-002': 'warning', 'chk-004': 'warning', 'chk-007': 'warning',
-  'chk-008': 'critical', 'chk-010': 'critical', 'chk-011': 'critical', 'chk-012': 'warning',
-  'chk-014': 'critical', 'chk-015': 'critical', 'chk-016': 'warning', 'chk-017': 'warning',
-  'chk-020': 'critical', 'chk-021': 'warning',
+  'chk-001': 'critical',
+  'chk-002': 'warning',
+  'chk-003': 'critical',
+  'chk-004': 'warning',
+  'chk-005': 'critical',
+  'chk-006': 'warning',
+  'chk-007': 'warning',
+  'chk-008': 'critical',
+  'chk-009': 'warning',
+  'chk-010': 'critical',
+  'chk-011': 'critical',
+  'chk-012': 'warning',
+  'chk-013': 'critical',
+  'chk-014': 'critical',
+  'chk-015': 'critical',
+  'chk-016': 'warning',
+  'chk-017': 'warning',
+  'chk-018': 'warning',
+  'chk-019': 'warning',
+  'chk-020': 'critical',
+  'chk-021': 'warning',
+  'chk-022': 'warning',
+  'chk-023': 'warning',
+  'chk-024': 'warning',
+  'chk-025': 'warning',
+  'chk-026': 'warning',
+  'chk-027': 'critical',
+  'chk-028': 'warning',
 }
 
 interface CheckDetailProps {
@@ -38,11 +62,8 @@ function CheckDetail({ check, onClose }: CheckDetailProps) {
       <div className="relative bg-card border-l border-border w-[480px] h-full overflow-y-auto z-10 flex flex-col">
         <div className="flex items-start justify-between px-5 py-4 border-b border-border sticky top-0 bg-card">
           <div className="flex-1 pr-4">
-            <div className="flex items-center gap-2 mb-1.5">
+            <div className="mb-1.5">
               <StatusBadge status={check.severity === 'critical' ? 'critical' : check.severity === 'warning' ? 'warning' : 'compliant'} size="sm" />
-              <span className="text-[11px] text-foreground uppercase tracking-wider font-medium">
-                {CATEGORY_LABELS[check.category]}
-              </span>
             </div>
             <h2 className="text-[15px] font-semibold text-foreground leading-snug text-balance">{check.name}</h2>
           </div>
@@ -91,6 +112,8 @@ export function ChecksPage() {
   const [severityFilter, setSeverityFilter] = useState<Severity | ''>('')
   const [selected, setSelected] = useState<ComplianceCheck | null>(null)
   const [liveChecks, setLiveChecks] = useState<ComplianceCheck[] | null>(null)
+  const [page, setPage] = useState(1)
+  const PAGE_SIZE = 9
 
   useEffect(() => {
     getSecurityChecks()
@@ -109,6 +132,10 @@ export function ChecksPage() {
       .catch(() => {})
   }, [])
 
+  useEffect(() => {
+    setPage(1)
+  }, [categoryFilter, severityFilter])
+
   const checks = liveChecks ?? complianceChecks
 
   const filtered = checks.filter(c => {
@@ -123,9 +150,14 @@ export function ChecksPage() {
     return b.failingDeviceCount - a.failingDeviceCount
   })
 
+  const totalPages = Math.max(1, Math.ceil(sorted.length / PAGE_SIZE))
+  const safePage = Math.min(page, totalPages)
+  const paginated = sorted.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE)
+
   const criticalCount = checks.filter(c => c.severity === 'critical').length
   const warningCount = checks.filter(c => c.severity === 'warning').length
   const totalFailing = checks.reduce((s, c) => s + c.failingDeviceCount, 0)
+  const mostFailedCheck = [...checks].sort((a, b) => b.failingDeviceCount - a.failingDeviceCount)[0]
 
   return (
     <>
@@ -138,15 +170,20 @@ export function ChecksPage() {
         />
 
         {/* Summary row */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
           {[
             { label: 'Total Checks', value: checks.length, color: undefined },
             { label: 'Critical Checks', value: criticalCount, color: STATUS_COLORS.critical },
             { label: 'Warning Checks', value: warningCount, color: STATUS_COLORS.warning },
+            {
+              label: 'Most failed check',
+              value: mostFailedCheck ? `${mostFailedCheck.name} (${mostFailedCheck.failingDeviceCount})` : '—',
+              color: STATUS_COLORS.warning,
+            },
           ].map(({ label, value, color }) => (
             <div key={label} className="bg-card border border-border rounded-md shadow-sm p-4">
               <p className="text-[11px] font-semibold uppercase tracking-wider text-foreground mb-2">{label}</p>
-              <p className="text-[30px] font-semibold leading-none tabular-nums" style={color ? { color } : undefined}>{value}</p>
+              <p className="text-[20px] font-semibold leading-snug tabular-nums" style={color ? { color } : undefined}>{value}</p>
             </div>
           ))}
         </div>
@@ -208,7 +245,7 @@ export function ChecksPage() {
               </tr>
             </thead>
             <tbody>
-              {sorted.length === 0 ? (
+              {paginated.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center">
                     <div className="flex flex-col items-center gap-2">
@@ -217,7 +254,7 @@ export function ChecksPage() {
                     </div>
                   </td>
                 </tr>
-              ) : sorted.map(check => (
+              ) : paginated.map(check => (
                 <tr
                   key={check.id}
                   className="border-b border-border h-11 hover:bg-surface-hover cursor-pointer transition-colors last:border-0"
@@ -257,6 +294,31 @@ export function ChecksPage() {
             </tbody>
           </table>
         </SectionCard>
+
+        {sorted.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-card px-3 py-2">
+            <p className="text-[12px] text-muted-foreground">
+              Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, sorted.length)} of {sorted.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={safePage === 1}
+                className="rounded-md border border-border px-3 py-1.5 text-[12px] text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Previous
+              </button>
+              <span className="text-[12px] text-muted-foreground">Page {safePage} / {totalPages}</span>
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={safePage === totalPages}
+                className="rounded-md border border-border px-3 py-1.5 text-[12px] text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </>
   )

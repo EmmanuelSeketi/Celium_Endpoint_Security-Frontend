@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
-import { AlertTriangle, CheckCircle2, Clock, Search, ShieldAlert, AlertCircle, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Search, ShieldAlert, AlertCircle, RefreshCw, X, ChevronLeft, ChevronRight } from 'lucide-react'
 import { devices as mockDevices } from '@/lib/mock-data'
 import type { Device } from '@/lib/types'
 import { PageHeader } from '@/components/ui/page-header'
@@ -12,7 +12,7 @@ import { FailingChecksPieChart } from '@/components/ui/charts'
 import { cn } from '@/lib/utils'
 import { STATUS_COLORS } from '@/lib/theme'
 import { useDataMode } from '@/lib/data-mode-provider'
-import { getDevices, queueUpdateCommand, waitForDeviceCommand, type ManagedDevice } from '@/lib/api-client'
+import { getDevices, getDeviceCommandStatus, queueUpdateCommand, waitForDeviceCommand, type ManagedDevice } from '@/lib/api-client'
 
 function OSIcon({ os }: { os: 'Windows' | 'Mac' | 'Linux' }) {
   if (os === 'Windows') {
@@ -39,17 +39,20 @@ function OSIcon({ os }: { os: 'Windows' | 'Mac' | 'Linux' }) {
 
 function getUpdateState(device: Device) {
   if (device.patchStatus.osEol) return { label: 'End of support', color: STATUS_COLORS.critical, icon: AlertTriangle }
+  if (device.patchStatus.updateScanStatus === 'failed') return { label: 'Update scan failed', color: STATUS_COLORS.critical, icon: AlertTriangle }
+  if (isInventoryStale(device)) return { label: 'Inventory stale', color: '#64748B', icon: RefreshCw }
   if (device.patchStatus.pendingReboot) return { label: 'Restart required', color: STATUS_COLORS.warning, icon: Clock }
   if (device.patchStatus.missingCritical > 0) return { label: 'Security updates missing', color: STATUS_COLORS.critical, icon: ShieldAlert }
   if (device.patchStatus.missingTotal > 0) return { label: 'Updates available', color: STATUS_COLORS.warning, icon: AlertCircle }
-  return { label: 'Up to date', color: STATUS_COLORS.compliant, icon: CheckCircle2 }
+  return { label: "You're up to date", color: STATUS_COLORS.compliant, icon: CheckCircle2 }
 }
 
 const INVENTORY_STALE_AFTER_MS = 60 * 60 * 1000
 
 function isInventoryStale(device: Device, now = Date.now()) {
   const lastCheck = Date.parse(device.patchStatus.lastUpdateCheck)
-  return !Number.isFinite(lastCheck) || now - lastCheck > INVENTORY_STALE_AFTER_MS
+  const unknownScanStatus = device.patchStatus.updateScanStatus !== undefined && device.patchStatus.updateScanStatus !== 'succeeded'
+  return unknownScanStatus || !Number.isFinite(lastCheck) || now - lastCheck > INVENTORY_STALE_AFTER_MS
 }
 
 function getInventoryAge(lastUpdateCheck: string) {
@@ -60,11 +63,22 @@ function getInventoryAge(lastUpdateCheck: string) {
 
 function getRiskRank(device: Device, now: number) {
   if (device.patchStatus.osEol) return 5
-  if (device.patchStatus.missingCritical > 0) return 4
-  if (device.patchStatus.pendingReboot) return 3
-  if (device.patchStatus.missingTotal > 0) return 2
+  if (!isInventoryStale(device, now) && device.patchStatus.missingCritical > 0) return 4
+  if (!isInventoryStale(device, now) && device.patchStatus.pendingReboot) return 3
+  if (!isInventoryStale(device, now) && device.patchStatus.missingTotal > 0) return 2
   if (isInventoryStale(device, now)) return 1
   return 0
+}
+
+function getRemediationState(device: Device, now: number) {
+  const stale = isInventoryStale(device, now)
+  if (device.patchStatus.osEol) return 'End-of-support OS'
+  if (device.patchStatus.updateScanStatus === 'failed') return 'Update scan failed'
+  if (!stale && device.patchStatus.missingCritical > 0) return 'Critical / important missing'
+  if (stale) return 'Inventory stale (> 60m)'
+  if (device.patchStatus.pendingReboot) return 'Restart required'
+  if (device.patchStatus.missingTotal > 0) return 'Other updates missing'
+  return "You're up to date"
 }
 
 export function PatchCompliancePage() {
@@ -75,8 +89,7 @@ export function PatchCompliancePage() {
   const [deviceSearch, setDeviceSearch] = useState('')
   const [updateStateFilter, setUpdateStateFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
-  const [commandDevice, setCommandDevice] = useState<string | null>(null)
-  const [commandPhase, setCommandPhase] = useState<'queued' | 'running'>('queued')
+  const [activeCommands, setActiveCommands] = useState<Record<string, { command: 'check_updates' | 'install_updates'; phase: 'queued' | 'running' }>>({})
   const [commandError, setCommandError] = useState<string | null>(null)
   const pageSize = 8
 
@@ -148,6 +161,8 @@ export function PatchCompliancePage() {
         missingTotal: device.patch_status?.missing_total ?? 0,
         pendingReboot: device.patch_status?.pending_reboot ?? false,
         lastUpdateCheck: device.patch_status?.last_update_check ?? '',
+        updateScanStatus: device.patch_status?.update_scan_status ?? 'unknown',
+        updateScanError: device.patch_status?.update_scan_error,
         osEol: device.patch_status?.os_eol ?? false,
         eolDate: device.patch_status?.eol_date,
       },
@@ -156,34 +171,36 @@ export function PatchCompliancePage() {
   }, [mode, apiDevices])
 
   const stats = useMemo(() => {
-    const total = devices.length
-    const fullyPatchedCount = devices.filter(device => device.patchStatus.missingCritical === 0 && device.patchStatus.missingTotal === 0).length
+    const freshDevices = devices.filter(device => !isInventoryStale(device))
+    const fullyPatchedCount = freshDevices.filter(device => device.patchStatus.missingCritical === 0 && device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot && !device.patchStatus.osEol).length
     return {
-      total,
-      patchCompliance: total === 0 ? 0 : Math.round((fullyPatchedCount / total) * 100),
-      pendingReboot: devices.filter(device => device.patchStatus.pendingReboot).length,
+      patchCompliance: freshDevices.length === 0 ? 0 : Math.round((fullyPatchedCount / freshDevices.length) * 100),
+      pendingReboot: freshDevices.filter(device => device.patchStatus.pendingReboot).length,
       eolDevices: devices.filter(device => device.patchStatus.osEol).length,
-      missingCritical: devices.reduce((sum, device) => sum + device.patchStatus.missingCritical, 0),
+      missingCritical: freshDevices.reduce((sum, device) => sum + device.patchStatus.missingCritical, 0),
+      updateScanFailures: devices.filter(device => device.patchStatus.updateScanStatus === 'failed').length,
+      freshDevices: freshDevices.length,
+      fullyPatched: fullyPatchedCount,
     }
   }, [devices])
 
-  const pendingReboot = devices.filter(d => d.patchStatus.pendingReboot).length
+  const pendingReboot = devices.filter(d => !isInventoryStale(d) && d.patchStatus.pendingReboot).length
   const eolDevices = devices.filter(d => d.patchStatus.osEol)
-  const fullyPatched = devices.filter(d => d.patchStatus.missingCritical === 0 && d.patchStatus.missingTotal === 0).length
+  const fullyPatched = stats.fullyPatched
   const staleInventoryDevices = devices.filter(device => isInventoryStale(device))
   const now = Date.now()
   const remediationSignals = [
-    { label: 'End-of-support OS', count: eolDevices.length, color: STATUS_COLORS.critical },
-    { label: 'Critical / important missing', count: devices.filter(device => !device.patchStatus.osEol && device.patchStatus.missingCritical > 0).length, color: '#C026D3' },
-    { label: 'Restart required', count: devices.filter(device => !device.patchStatus.osEol && device.patchStatus.missingCritical === 0 && device.patchStatus.pendingReboot).length, color: STATUS_COLORS.warning },
-    { label: 'Other updates missing', count: devices.filter(device => !device.patchStatus.osEol && device.patchStatus.missingCritical === 0 && !device.patchStatus.pendingReboot && device.patchStatus.missingTotal > 0).length, color: '#2563EB' },
-    { label: 'Inventory stale (> 60m)', count: devices.filter(device => !device.patchStatus.osEol && device.patchStatus.missingCritical === 0 && !device.patchStatus.pendingReboot && device.patchStatus.missingTotal === 0 && isInventoryStale(device, now)).length, color: '#64748B' },
-    {
-      label: 'Current and recently scanned',
-      count: devices.filter(device => device.patchStatus.missingCritical === 0 && device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot && !device.patchStatus.osEol && !isInventoryStale(device, now)).length,
-      color: STATUS_COLORS.compliant,
-    },
-  ]
+    { label: 'End-of-support OS', color: STATUS_COLORS.critical },
+    { label: 'Critical / important missing', color: '#C026D3' },
+    { label: 'Restart required', color: STATUS_COLORS.warning },
+    { label: 'Other updates missing', color: '#2563EB' },
+    { label: 'Inventory stale (> 60m)', color: '#64748B' },
+    { label: 'Update scan failed', color: STATUS_COLORS.critical },
+    { label: "You're up to date", color: STATUS_COLORS.compliant },
+  ].map(signal => ({
+    ...signal,
+    count: devices.filter(device => getRemediationState(device, now) === signal.label).length,
+  }))
   const remediationChartData = remediationSignals
     .filter(signal => signal.count > 0)
     .map(signal => ({ name: signal.label, value: signal.count, color: signal.color }))
@@ -192,10 +209,14 @@ export function PatchCompliancePage() {
   const devicesSorted = [...devices].sort((a, b) => b.patchStatus.missingCritical - a.patchStatus.missingCritical || b.patchStatus.missingTotal - a.patchStatus.missingTotal)
   const atRiskDevices = devices
     .filter(device => getRiskRank(device, now) > 0)
-    .sort((a, b) => getRiskRank(b, now) - getRiskRank(a, now)
-      || b.patchStatus.missingCritical - a.patchStatus.missingCritical
-      || b.patchStatus.missingTotal - a.patchStatus.missingTotal
-      || Date.parse(a.patchStatus.lastUpdateCheck) - Date.parse(b.patchStatus.lastUpdateCheck))
+    .sort((a, b) => {
+      const rankDifference = getRiskRank(b, now) - getRiskRank(a, now)
+      if (rankDifference !== 0) return rankDifference
+      if (getRiskRank(a, now) === 1) return Date.parse(a.patchStatus.lastUpdateCheck) - Date.parse(b.patchStatus.lastUpdateCheck)
+      return b.patchStatus.missingCritical - a.patchStatus.missingCritical
+        || b.patchStatus.missingTotal - a.patchStatus.missingTotal
+        || Date.parse(a.patchStatus.lastUpdateCheck) - Date.parse(b.patchStatus.lastUpdateCheck)
+    })
     .slice(0, 5)
   const filteredDevices = useMemo(() => {
     const query = deviceSearch.trim().toLowerCase()
@@ -209,31 +230,97 @@ export function PatchCompliancePage() {
   }, [deviceSearch, updateStateFilter, devicesSorted])
   const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize))
   const pagedDevices = filteredDevices.slice((currentPage - 1) * pageSize, currentPage * pageSize)
+  const visibleDeviceIds = pagedDevices.map(device => device.id).join('|')
+
+  useEffect(() => {
+    if (mode === 'demo' || !visibleDeviceIds) {
+      setActiveCommands({})
+      return
+    }
+
+    let cancelled = false
+    const deviceIds = visibleDeviceIds.split('|')
+    const refreshedCommandIds = new Set<string>()
+    const refreshCommandStates = async () => {
+      const results = await Promise.all(deviceIds.map(async deviceId => {
+        try {
+          return { deviceId, status: await getDeviceCommandStatus(deviceId) }
+        } catch {
+          return { deviceId, status: null }
+        }
+      }))
+      if (cancelled) return
+
+      const hasNewlyCompletedUpdate = results.some(({ status }) => {
+        if (!status || status.status !== 'succeeded' || (status.command !== 'check_updates' && status.command !== 'install_updates')) return false
+        if (refreshedCommandIds.has(status.command_id)) return false
+        refreshedCommandIds.add(status.command_id)
+        return true
+      })
+      if (hasNewlyCompletedUpdate) {
+        void getDevices()
+          .then(devicesData => {
+            if (!cancelled) setApiDevices(Array.isArray(devicesData) ? devicesData : [])
+          })
+          .catch(() => undefined)
+      }
+
+      setActiveCommands(current => {
+        const next = { ...current }
+        for (const { deviceId, status } of results) {
+          if (!status) continue
+          const command = status.command === 'check_updates' || status.command === 'install_updates' ? status.command : null
+          const phase = status.status === 'queued' ? 'queued' : status.status === 'running' ? 'running' : null
+          if (command && phase) {
+            next[deviceId] = { command, phase }
+          } else {
+            delete next[deviceId]
+          }
+        }
+        return next
+      })
+    }
+
+    void refreshCommandStates()
+    const interval = window.setInterval(() => void refreshCommandStates(), 5000)
+    return () => {
+      cancelled = true
+      window.clearInterval(interval)
+    }
+  }, [mode, visibleDeviceIds])
+
   const platformSummaries = (['Windows', 'Mac', 'Linux'] as const).map(os => {
     const platformDevices = devices.filter(device => device.os === os)
-    const current = platformDevices.filter(device => device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot).length
-    return { os, total: platformDevices.length, current, pending: platformDevices.filter(device => device.patchStatus.pendingReboot).length }
+    const scanned = platformDevices.filter(device => !isInventoryStale(device))
+    const current = scanned.filter(device => device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot && !device.patchStatus.osEol).length
+    return { os, total: platformDevices.length, scanned: scanned.length, current, pending: scanned.filter(device => device.patchStatus.pendingReboot).length }
   })
 
-  async function installUpdates(device: Device) {
+  async function runUpdateCommand(device: Device, command: 'check_updates' | 'install_updates') {
     if (mode === 'demo') return
-    setCommandDevice(device.id)
-    setCommandPhase('queued')
     setCommandError(null)
+    setActiveCommands(current => ({ ...current, [device.id]: { command, phase: 'queued' } }))
     try {
-      const queued = await queueUpdateCommand(device.id, 'install_updates')
+      const queued = await queueUpdateCommand(device.id, command)
       const outcome = await waitForDeviceCommand(device.id, queued.command_id, status => {
-        setCommandPhase(status.status === 'running' ? 'running' : 'queued')
-      }, 2000, 60 * 60 * 1000)
+        const phase = status.status === 'running' ? 'running' : status.status === 'queued' ? 'queued' : null
+        if (phase) {
+          setActiveCommands(current => ({ ...current, [device.id]: { command, phase } }))
+        }
+      }, 2000, command === 'install_updates' ? 2 * 60 * 60 * 1000 : 30 * 60 * 1000)
       if (!outcome) throw new Error('Still waiting for the endpoint agent. Check that it is online.')
-      if (outcome.status === 'failed') throw new Error(outcome.result || 'The endpoint could not install updates.')
-      if (outcome.status === 'cancelled') throw new Error(outcome.result || 'Update installation was cancelled.')
+      if (outcome.status === 'failed') throw new Error(outcome.result || 'The endpoint could not complete the update command.')
+      if (outcome.status === 'cancelled') throw new Error(outcome.result || 'The update command was cancelled.')
       const refreshedDevices = await getDevices()
       setApiDevices(Array.isArray(refreshedDevices) ? refreshedDevices : [])
     } catch (error) {
-      setCommandError(error instanceof Error ? error.message : 'Unable to install updates')
+      setCommandError(error instanceof Error ? error.message : 'Unable to complete the update command')
     } finally {
-      setCommandDevice(null)
+      setActiveCommands(current => {
+        const next = { ...current }
+        delete next[device.id]
+        return next
+      })
     }
   }
 
@@ -260,20 +347,20 @@ export function PatchCompliancePage() {
         {[
           {
             label: 'Update Compliance',
-            value: `${stats.patchCompliance}%`,
-            description: `${stats.total - fullyPatched} devices have missing patches`,
-            color: stats.patchCompliance >= 85 ? STATUS_COLORS.compliant : stats.patchCompliance >= 70 ? STATUS_COLORS.warning : STATUS_COLORS.critical,
+            value: stats.freshDevices > 0 ? `${stats.patchCompliance}%` : '—',
+            description: stats.freshDevices > 0 ? `${fullyPatched} of ${stats.freshDevices} freshly scanned devices are current` : 'No fresh update inventory reported',
+            color: stats.freshDevices === 0 ? 'var(--muted-foreground)' : stats.patchCompliance >= 85 ? STATUS_COLORS.compliant : stats.patchCompliance >= 70 ? STATUS_COLORS.warning : STATUS_COLORS.critical,
           },
           {
             label: 'Critical / Important',
-            value: stats.missingCritical,
-            description: `Across ${devices.filter(device => device.patchStatus.missingCritical > 0).length} endpoints with critical or important updates`,
-            color: stats.missingCritical > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant,
+            value: stats.freshDevices > 0 ? stats.missingCritical : '—',
+            description: stats.freshDevices > 0 ? `Across ${devices.filter(device => !isInventoryStale(device) && device.patchStatus.missingCritical > 0).length} freshly scanned endpoints` : 'No successful update scan reported',
+            color: stats.freshDevices === 0 ? 'var(--muted-foreground)' : stats.missingCritical > 0 ? STATUS_COLORS.critical : STATUS_COLORS.compliant,
           },
           {
             label: 'Pending Reboot',
             value: pendingReboot,
-            description: 'Awaiting restart to apply patches',
+            description: 'Fresh scans reporting a required restart',
             color: pendingReboot > 0 ? STATUS_COLORS.warning : STATUS_COLORS.compliant,
           },
           {
@@ -296,8 +383,8 @@ export function PatchCompliancePage() {
       {/* Platform posture */}
       <SectionCard title="Update posture by platform" description="A quick view of update readiness across the fleet.">
         <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-          {platformSummaries.map(({ os, total, current, pending }) => {
-            const percentage = total === 0 ? 0 : Math.round((current / total) * 100)
+          {platformSummaries.map(({ os, total, scanned, current, pending }) => {
+            const percentage = scanned ? Math.round((current / scanned) * 100) : null
             return (
               <div key={os} className="rounded-md border border-border bg-surface px-4 py-3">
                 <div className="flex items-center justify-between gap-3">
@@ -305,13 +392,13 @@ export function PatchCompliancePage() {
                     <OSIcon os={os} />
                     <span className="text-[13px] font-semibold text-foreground">{os}</span>
                   </div>
-                  <span className="font-mono text-[13px] font-semibold text-foreground">{percentage}%</span>
+                  <span className="font-mono text-[13px] font-semibold text-foreground">{percentage === null ? '—' : `${percentage}%`}</span>
                 </div>
                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-border">
-                  <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percentage}%` }} />
+                  <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percentage ?? 0}%` }} />
                 </div>
                 <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{current} of {total} ready</span>
+                  <span>{percentage === null ? `No scan · ${total} devices` : `${current} of ${scanned} scanned ready`}</span>
                   <span>{pending} restart{pending === 1 ? '' : 's'} required</span>
                 </div>
               </div>
@@ -321,8 +408,8 @@ export function PatchCompliancePage() {
       </SectionCard>
 
       {/* Remediation signals and endpoint priority list */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        <SectionCard title="Remediation queue" description="Each endpoint appears once, assigned to its highest-priority reported state.">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+        <SectionCard title="Remediation queue" description="Each endpoint appears once, assigned to its highest-priority reported state." className="min-w-0 lg:col-span-2">
           {devices.length === 0 ? (
             <div className="flex h-[220px] items-center justify-center text-center text-[12px] text-muted-foreground">No endpoint update data is available.</div>
           ) : (
@@ -335,7 +422,7 @@ export function PatchCompliancePage() {
           )}
         </SectionCard>
 
-        <SectionCard title="At-risk endpoints" description="Highest-priority devices, ranked by OS lifecycle, missing updates, restart state, then inventory age." className="lg:col-span-2">
+        <SectionCard title="At-risk endpoints" description="Highest-priority devices, ranked by OS lifecycle, missing updates, restart state, then inventory age." className="min-w-0 lg:col-span-3">
           {atRiskDevices.length === 0 ? (
             <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground">
               No endpoint update risks are currently reported.
@@ -358,14 +445,24 @@ export function PatchCompliancePage() {
                           <p className="truncate text-[11px] text-muted-foreground">{device.osCaption || device.os} · {device.osVersion}</p>
                         </div>
                         <div className="text-[11px] text-foreground">
-                          <p>{device.patchStatus.missingCritical} critical / important</p>
-                          <p className="text-muted-foreground">{device.patchStatus.missingTotal} total</p>
+                          {stale ? (
+                            <>
+                              <p>Update counts unverified</p>
+                              <p className="text-muted-foreground">Last scan {getInventoryAge(device.patchStatus.lastUpdateCheck)}</p>
+                            </>
+                          ) : (
+                            <>
+                              <p>{device.patchStatus.missingCritical} critical / important</p>
+                              <p className="text-muted-foreground">{device.patchStatus.missingTotal} total</p>
+                            </>
+                          )}
                         </div>
                         <div className="space-y-1">
                           <div className="flex flex-wrap gap-1">
                             {device.patchStatus.osEol && <span className="rounded-sm bg-status-critical/10 px-1.5 py-0.5 text-[10px] font-medium text-status-critical">OS end-of-support</span>}
-                            {device.patchStatus.pendingReboot && <span className="rounded-sm bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">Restart required</span>}
-                            {device.patchStatus.missingTotal > 0 && <span className="rounded-sm bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">Updates available</span>}
+                            {device.patchStatus.updateScanStatus === 'failed' && <span className="rounded-sm bg-status-critical/10 px-1.5 py-0.5 text-[10px] font-medium text-status-critical">Update scan failed</span>}
+                            {!stale && device.patchStatus.pendingReboot && <span className="rounded-sm bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">Restart required</span>}
+                            {!stale && device.patchStatus.missingTotal > 0 && <span className="rounded-sm bg-status-warning/10 px-1.5 py-0.5 text-[10px] font-medium text-status-warning">Updates available</span>}
                             {stale && <span className="rounded-sm bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">Scan stale</span>}
                           </div>
                           <p className={cn('text-[10px]', stale ? 'text-status-warning' : 'text-muted-foreground')}>
@@ -426,7 +523,7 @@ export function PatchCompliancePage() {
             className="h-8 rounded-md border border-border bg-surface px-2.5 text-[12px] text-foreground outline-none focus:border-brand/60"
           >
             <option value="">All update states</option>
-            {['Up to date', 'Updates available', 'Security updates missing', 'Restart required', 'End of support'].map(state => (
+            {["You're up to date", 'Updates available', 'Security updates missing', 'Restart required', 'End of support', 'Inventory stale', 'Update scan failed'].map(state => (
               <option key={state} value={state}>{state}</option>
             ))}
           </select>
@@ -466,8 +563,8 @@ export function PatchCompliancePage() {
                   <span className="col-span-2 text-center text-[12px] text-black dark:text-white">
                     {d.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
                   </span>
-                  <span className={cn('col-span-2 text-center text-[12px] font-medium', d.patchStatus.pendingReboot ? 'text-[#F79009]' : 'text-[#16A34A]')}>
-                    {d.patchStatus.pendingReboot ? 'Required' : 'No'}
+                  <span className={cn('col-span-2 text-center text-[12px] font-medium', isInventoryStale(d) ? 'text-muted-foreground' : d.patchStatus.pendingReboot ? 'text-[#F79009]' : 'text-[#16A34A]')}>
+                    {isInventoryStale(d) ? 'Unknown' : d.patchStatus.pendingReboot ? 'Required' : 'No'}
                   </span>
                   <span className="col-span-2 flex flex-col items-start gap-1">
                     {(() => {
@@ -483,11 +580,20 @@ export function PatchCompliancePage() {
                         </span>
                       )
                     })()}
-                    {d.patchStatus.missingTotal > 0 && (
-                      <button type="button" disabled={commandDevice === d.id} onClick={() => void installUpdates(d)} className="text-[10px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
-                        {commandDevice === d.id ? commandPhase === 'running' ? 'Installing…' : 'Waiting for agent…' : 'Download and Install'}
-                      </button>
-                    )}
+                    {d.os === 'Windows' && (isInventoryStale(d) || d.patchStatus.missingTotal > 0) && (() => {
+                      const activeCommand = activeCommands[d.id]
+                      const command = isInventoryStale(d) ? 'check_updates' : 'install_updates'
+                      const label = activeCommand
+                        ? activeCommand.command === 'check_updates'
+                          ? activeCommand.phase === 'running' ? 'Checking for updates…' : 'Waiting for agent…'
+                          : activeCommand.phase === 'running' ? 'Installing…' : 'Waiting for agent…'
+                        : command === 'check_updates' ? 'Check for updates' : 'Download and Install'
+                      return (
+                        <button type="button" disabled={Boolean(activeCommand)} onClick={() => void runUpdateCommand(d, command)} className="text-[10px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
+                          {label}
+                        </button>
+                      )
+                    })()}
                   </span>
                 </div>
               ))}

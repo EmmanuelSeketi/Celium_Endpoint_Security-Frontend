@@ -95,6 +95,8 @@ export type ManagedDevice = {
     missing_total: number
     pending_reboot: boolean
     last_update_check?: string
+    update_scan_status?: 'unknown' | 'succeeded' | 'failed'
+    update_scan_error?: string
     os_eol: boolean
     eol_date?: string
   }
@@ -561,6 +563,8 @@ export type AgentTelemetryRequest = {
     missing_total: number
     pending_reboot: boolean
     last_update_check?: string
+    update_scan_status: 'unknown' | 'succeeded' | 'failed'
+    update_scan_error?: string
     os_eol: boolean
     eol_date?: string
   }

@@ -385,8 +385,8 @@ export const reports: ReportTemplate[] = [
   { id: 'rpt-001', name: 'Fleet Compliance Executive Summary — July 2026', type: 'Executive Summary', dateRange: 'Jul 1 – Jul 31, 2026', generatedDate: daysAgo(1), format: 'PDF' },
   { id: 'rpt-002', name: 'Detailed Compliance Report — Q2 2026', type: 'Compliance Detail', dateRange: 'Apr 1 – Jun 30, 2026', generatedDate: daysAgo(5), format: 'PDF' },
   { id: 'rpt-003', name: 'Active Directory Security Assessment — July 2026', type: 'AD Security', dateRange: 'Jul 1 – Jul 31, 2026', generatedDate: daysAgo(2), format: 'PDF' },
-  { id: 'rpt-004', name: 'Malware Detection Summary — Last 30 Days', type: 'Malware Summary', dateRange: 'Jul 1 – Jul 31, 2026', generatedDate: daysAgo(3), format: 'CSV' },
-  { id: 'rpt-005', name: 'OS Updates Status — Fleet', type: 'OS Updates', dateRange: 'Jul 1 – Jul 31, 2026', generatedDate: daysAgo(1), format: 'CSV' },
+  { id: 'rpt-004', name: 'Malware Detection Summary — Last 30 Days', type: 'Malware Summary', dateRange: 'Jul 1 – Jul 31, 2026', generatedDate: daysAgo(3), format: 'DOCX' },
+  { id: 'rpt-005', name: 'OS Updates Status — Fleet', type: 'OS Updates', dateRange: 'Jul 1 – Jul 31, 2026', generatedDate: daysAgo(1), format: 'DOCX' },
   { id: 'rpt-006', name: 'Fleet Compliance Executive Summary — June 2026', type: 'Executive Summary', dateRange: 'Jun 1 – Jun 30, 2026', generatedDate: '2026-07-01T08:00:00Z', format: 'PDF' },
 ]
 

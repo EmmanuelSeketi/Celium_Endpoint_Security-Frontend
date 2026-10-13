@@ -28,6 +28,8 @@ export interface PatchStatus {
   missingTotal: number
   pendingReboot: boolean
   lastUpdateCheck: string // ISO datetime
+  updateScanStatus?: 'unknown' | 'succeeded' | 'failed'
+  updateScanError?: string
   osEol: boolean
   eolDate?: string
   updateHistory?: Record<string, unknown>[]
@@ -197,7 +199,7 @@ export interface ReportTemplate {
   type: 'Executive Summary' | 'Compliance Detail' | 'AD Security' | 'Malware Summary' | 'OS Updates'
   dateRange: string
   generatedDate: string
-  format: 'PDF' | 'CSV'
+  format: 'PDF' | 'DOCX'
 }
 
 export interface KPI {

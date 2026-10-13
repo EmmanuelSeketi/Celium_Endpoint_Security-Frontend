@@ -50,7 +50,7 @@ export function KpiCard({
       )}
     >
       <div className="flex items-center -mx-4 -mt-4 px-4 py-3 mb-1 border-b border-border">
-        <span className={cn('text-[13px] font-semibold uppercase tracking-wider text-foreground', labelClassName)}>
+        <span className={cn('text-[13px] font-semibold uppercase tracking-wider text-black dark:text-white', labelClassName)}>
           {label}
         </span>
       </div>
