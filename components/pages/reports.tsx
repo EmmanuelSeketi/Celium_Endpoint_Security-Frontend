@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { format } from 'date-fns'
 import { AlertTriangle, ArrowDownToLine, FileText, Plus, RefreshCw, FileSpreadsheet, ShieldCheck } from 'lucide-react'
 import { devices, complianceChecks, adDomainStatus, detections } from '@/lib/mock-data'
 import { KpiCard } from '@/components/ui/kpi-card'
@@ -10,6 +9,7 @@ import type { Device, ReportTemplate, Severity } from '@/lib/types'
 import { cn } from '@/lib/utils'
 import { useDataMode } from '@/lib/data-mode-provider'
 import { getADDomainStatus, getDevices, getMalwareDetections, getSecurityChecks, type ADDomainStatus, type ManagedDevice, type MalwareDetection } from '@/lib/api-client'
+import { formatOrganizationDate } from '@/lib/organization-time'
 
 const TYPE_COLORS: Record<ReportTemplate['type'], string> = {
   'Executive Summary': '#5B7FFF',
@@ -132,7 +132,11 @@ function escapeXml(value: string): string {
 function formatReportDate(value: string | undefined, pattern: string) {
   if (!value) return 'not reported'
   const date = new Date(value)
-  return Number.isFinite(date.getTime()) ? format(date, pattern) : 'not reported'
+  if (!Number.isFinite(date.getTime())) return 'not reported'
+  const includesTime = pattern.includes('HH:mm')
+  return formatOrganizationDate(date, includesTime
+    ? { dateStyle: 'medium', timeStyle: 'short' }
+    : { dateStyle: 'medium' })
 }
 
 function buildPdfBlob(title: string, lines: string[]): Blob {
@@ -512,7 +516,7 @@ function getReportSections(type: ReportTemplate['type'], snapshot: ReportSnapsho
 function buildReportBlob(report: ReportTemplate, snapshot: ReportSnapshot): Blob {
   const sections = getReportSections(report.type, snapshot)
   const lines = [
-    `Generated: ${format(new Date(), 'MMM d, yyyy HH:mm')}`,
+    `Generated: ${formatOrganizationDate(new Date())}`,
     'Coverage: current inventory snapshot; findings reflect the data available at generation time.',
     '',
     ...sections.flatMap(section => [`## ${section.heading}`, ...section.lines, '']),

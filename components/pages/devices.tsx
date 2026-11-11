@@ -13,6 +13,7 @@ import { KpiCard } from '@/components/ui/kpi-card'
 import { getDefinitionAgeColor, STATUS_COLORS } from '@/lib/theme'
 import type { Device, OS, DeviceStatus } from '@/lib/types'
 import { cn } from '@/lib/utils'
+import { formatOrganizationDate } from '@/lib/organization-time'
 
 const OS_OPTIONS: OS[] = ['Windows', 'Mac', 'Linux']
 const STATUS_OPTIONS: DeviceStatus[] = ['compliant', 'warning', 'critical']
@@ -178,7 +179,7 @@ function getMalwareRows(device: Device): { provider: string; summary: string; ro
           { label: 'Security intelligence', value: `${malware.definitionAge} day${malware.definitionAge === 1 ? '' : 's'} old`, color: getDefinitionAgeColor(malware.definitionAge) },
           { label: 'Security intelligence status', value: malware.definitionAge <= 3 ? 'Up to date' : 'Update required', color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
           { label: 'Security intelligence version', value: malware.securityIntelligenceVersion ?? 'Not reported', mono: true },
-          { label: 'Last update', value: malware.securityIntelligenceUpdatedAt ? format(new Date(malware.securityIntelligenceUpdatedAt), 'MMM d, yyyy HH:mm') : format(new Date(device.lastScanned), 'MMM d, yyyy HH:mm'), color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
+          { label: 'Last update', value: malware.securityIntelligenceUpdatedAt ? formatOrganizationDate(malware.securityIntelligenceUpdatedAt) : formatOrganizationDate(device.lastScanned), color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
           { label: 'Update check', value: malware.definitionAge <= 3 ? 'No action needed' : 'Check for updates', color: malware.definitionAge <= 3 ? STATUS_COLORS.compliant : STATUS_COLORS.warning },
           { label: 'Real-time protection', value: malware.realtimeProtection ? 'Enabled' : 'Disabled', color: protectionColor },
           { label: 'Dev Drive protection', value: malware.devDriveProtection ? 'Enabled' : 'Disabled', color: malware.devDriveProtection ? STATUS_COLORS.compliant : STATUS_COLORS.critical },
@@ -830,7 +831,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                 const lastCheckedLabel = Number.isFinite(checkedAt) ? formatDistanceToNow(new Date(checkedAt), { addSuffix: true }) : 'never'
                 const pauseUntil = Date.parse(device.patchStatus.updatesPauseUntil ?? '')
                 const updatesPaused = Number.isFinite(pauseUntil) && pauseUntil > Date.now()
-                const pauseUntilLabel = updatesPaused ? format(new Date(pauseUntil), 'MMM d, yyyy') : ''
+                const pauseUntilLabel = updatesPaused ? formatOrganizationDate(pauseUntil, { dateStyle: 'medium' }) : ''
 
                 return (
                   <>
@@ -1033,7 +1034,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
 
                     <p className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       <RefreshCw size={12} strokeWidth={1.75} className="shrink-0" />
-                      Last full update inventory check: {Number.isFinite(checkedAt) ? format(new Date(checkedAt), 'MMM d, yyyy HH:mm') : 'Never'}
+                      Last full update inventory check: {Number.isFinite(checkedAt) ? formatOrganizationDate(checkedAt) : 'Never'}
                     </p>
                   </>
                 )
@@ -1180,7 +1181,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                 for (const result of scanHistory) runs.set(result.checked_at, [...(runs.get(result.checked_at) ?? []), result])
                 return <div className="divide-y divide-border rounded-md border border-border bg-surface shadow-sm">{[...runs.entries()].map(([timestamp, results]) => {
                   const failed = results.filter(result => result.status === 'failed' || result.status === 'error').length
-                  return <div key={timestamp} className="px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[12px] text-foreground">{format(new Date(timestamp), 'MMM d, yyyy HH:mm:ss')}</span><span className="text-[11px] text-muted-foreground">{results.length} checks · {failed} failed</span></div><div className="mt-2 divide-y divide-border">{results.map(result => <div key={result.id} className="flex items-start justify-between gap-3 py-2"><div><p className="text-[12px] font-medium text-foreground">{result.check_title}</p>{result.details && <p className="mt-0.5 text-[11px] text-muted-foreground">{result.details}</p>}</div><span className={cn('text-[11px] font-semibold capitalize', result.status === 'passed' ? 'text-status-compliant' : result.status === 'failed' ? 'text-status-critical' : 'text-status-warning')}>{result.status}</span></div>)}</div></div>
+                  return <div key={timestamp} className="px-3 py-3"><div className="flex flex-wrap items-center justify-between gap-2"><span className="font-mono text-[12px] text-foreground">{formatOrganizationDate(timestamp, { dateStyle: 'medium', timeStyle: 'medium' })}</span><span className="text-[11px] text-muted-foreground">{results.length} checks · {failed} failed</span></div><div className="mt-2 divide-y divide-border">{results.map(result => <div key={result.id} className="flex items-start justify-between gap-3 py-2"><div><p className="text-[12px] font-medium text-foreground">{result.check_title}</p>{result.details && <p className="mt-0.5 text-[11px] text-muted-foreground">{result.details}</p>}</div><span className={cn('text-[11px] font-semibold capitalize', result.status === 'passed' ? 'text-status-compliant' : result.status === 'failed' ? 'text-status-critical' : 'text-status-warning')}>{result.status}</span></div>)}</div></div>
                 })}{scanHistory.length === 0 && <p className="px-3 py-8 text-center text-[12px] text-muted-foreground">No compliance scan history has been reported by this endpoint.</p>}</div>
               })()}
             </div>
@@ -1194,7 +1195,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                 <button type="button" onClick={() => setUpdateHistoryOpen(false)} aria-label="Close update history"><X size={14} /></button>
               </div>
               <div className="max-h-[520px] divide-y divide-border overflow-y-auto">
-                {(device.patchStatus.updateHistory ?? []).map((item, index) => <div key={index} className="space-y-1 px-4 py-3"><p className="text-[12px] font-medium text-foreground">{String(item.title ?? 'Windows Update')}</p><p className="text-[11px] text-muted-foreground">{String(item.status ?? 'Unknown')} · {item.date ? format(new Date(String(item.date)), 'MMM d, yyyy HH:mm') : 'Unknown date'}</p><p className="text-[11px] text-muted-foreground">{String(item.description ?? item.operation ?? '')}</p></div>)}
+                {(device.patchStatus.updateHistory ?? []).map((item, index) => <div key={index} className="space-y-1 px-4 py-3"><p className="text-[12px] font-medium text-foreground">{String(item.title ?? 'Windows Update')}</p><p className="text-[11px] text-muted-foreground">{String(item.status ?? 'Unknown')} · {item.date ? formatOrganizationDate(String(item.date)) : 'Unknown date'}</p><p className="text-[11px] text-muted-foreground">{String(item.description ?? item.operation ?? '')}</p></div>)}
                 {(device.patchStatus.updateHistory ?? []).length === 0 && <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">No Windows Update history reported yet.</p>}
               </div>
             </div>
@@ -1206,7 +1207,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
               <div className="flex items-center justify-between border-b border-border px-4 py-3"><p className="text-[13px] font-semibold text-foreground">Protection History</p><button type="button" onClick={() => setProtectionHistoryOpen(false)} aria-label="Close protection history"><X size={14} /></button></div>
               {protectionHistoryLoading ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">Loading protection history...</p> : <div className="max-h-[520px] divide-y divide-border overflow-y-auto">{protectionHistory.length === 0 ? <p className="px-4 py-8 text-center text-[12px] text-muted-foreground">No protection history reported for this endpoint.</p> : protectionHistory.map(item => {
                 const expanded = expandedProtectionId === item.id
-                return <div key={item.id} className="px-4 py-1"><button type="button" onClick={() => setExpandedProtectionId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left"><span className="min-w-0 truncate text-[12px] font-semibold text-foreground">{item.threat_name}</span><span className="inline-flex shrink-0 items-center gap-2 text-[11px] capitalize text-muted-foreground"><span>{item.action}</span>{(item.occurrences ?? 1) > 1 && <span className="rounded border border-border px-1.5 py-0.5 normal-case">{item.occurrences} reports</span>}<ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} /></span></button>{expanded && <div className="space-y-2 border-t border-border pb-3 pt-2"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Affected item</p><p className="break-all text-[11px] text-foreground">{item.file_path || 'Not reported'}</p></div><div className="grid grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</p><p className="text-[11px] capitalize text-foreground">{item.action}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Severity</p><p className="text-[11px] capitalize text-foreground">{item.severity}</p></div></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Detected</p><p className="text-[11px] text-foreground">{format(new Date(item.detected_at), 'MMM d, yyyy HH:mm')}</p></div></div>}</div>
+                return <div key={item.id} className="px-4 py-1"><button type="button" onClick={() => setExpandedProtectionId(expanded ? null : item.id)} className="flex w-full items-center justify-between gap-3 py-2 text-left"><span className="min-w-0 truncate text-[12px] font-semibold text-foreground">{item.threat_name}</span><span className="inline-flex shrink-0 items-center gap-2 text-[11px] capitalize text-muted-foreground"><span>{item.action}</span>{(item.occurrences ?? 1) > 1 && <span className="rounded border border-border px-1.5 py-0.5 normal-case">{item.occurrences} reports</span>}<ChevronDown size={13} className={cn('transition-transform', expanded && 'rotate-180')} /></span></button>{expanded && <div className="space-y-2 border-t border-border pb-3 pt-2"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Affected item</p><p className="break-all text-[11px] text-foreground">{item.file_path || 'Not reported'}</p></div><div className="grid grid-cols-2 gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Status</p><p className="text-[11px] capitalize text-foreground">{item.action}</p></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Severity</p><p className="text-[11px] capitalize text-foreground">{item.severity}</p></div></div><div><p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Detected</p><p className="text-[11px] text-foreground">{formatOrganizationDate(item.detected_at)}</p></div></div>}</div>
               })}</div>}
             </div>
           </div>

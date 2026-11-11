@@ -7,7 +7,8 @@ import { SectionCard } from '@/components/ui/section-card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { useAuth } from '@/lib/auth-provider'
-import { getApiKeys, createApiKey, deleteApiKey as deleteApiKeyApi, getEnrollmentTokens, createEnrollmentToken, deleteEnrollmentToken as deleteEnrollmentTokenApi, type ApiKey, type EnrollmentToken } from '@/lib/api-client'
+import { getApiKeys, createApiKey, deleteApiKey as deleteApiKeyApi, getEnrollmentTokens, createEnrollmentToken, deleteEnrollmentToken as deleteEnrollmentTokenApi, getOrganizationSettings, updateOrganizationSettings, type ApiKey, type EnrollmentToken } from '@/lib/api-client'
+import { formatOrganizationDate, setOrganizationTimezone } from '@/lib/organization-time'
 
 type Section = 'account' | 'general' | 'notifications' | 'security' | 'api'
 
@@ -18,6 +19,22 @@ const SECTIONS: { id: Section; label: string; icon: typeof Settings }[] = [
   { id: 'security', label: 'Security Policies', icon: Shield },
   { id: 'api', label: 'API & Tokens', icon: Key },
 ]
+
+const TIMEZONES = [
+  ['UTC', 'UTC'],
+  ['America/Los_Angeles', 'Pacific Time'],
+  ['America/Denver', 'Mountain Time'],
+  ['America/Chicago', 'Central Time'],
+  ['America/New_York', 'Eastern Time'],
+  ['Europe/London', 'United Kingdom'],
+  ['Europe/Paris', 'Central European Time'],
+  ['Africa/Nairobi', 'East Africa Time'],
+  ['Asia/Dubai', 'Gulf Standard Time'],
+  ['Asia/Kolkata', 'India Standard Time'],
+  ['Asia/Singapore', 'Singapore'],
+  ['Asia/Tokyo', 'Japan Standard Time'],
+  ['Australia/Sydney', 'Australian Eastern Time'],
+] as const
 
 /* ---------- Shared styles (one source of truth for controls) ---------- */
 
@@ -138,11 +155,15 @@ function TextField({
   onChange,
   placeholder,
   type = 'text',
+  min,
+  max,
 }: {
   value: string
   onChange: (v: string) => void
   placeholder?: string
   type?: string
+  min?: number
+  max?: number
 }) {
   return (
     <input
@@ -150,6 +171,8 @@ function TextField({
       value={value}
       onChange={e => onChange(e.target.value)}
       placeholder={placeholder}
+      min={min}
+      max={max}
       className={cn(inputBase, 'w-full sm:w-64')}
     />
   )
@@ -259,9 +282,13 @@ export function SettingsPage() {
   const [tokenError, setTokenError] = useState<string | null>(null)
 
   // General
-  const [orgName, setOrgName] = useState('Acme Corp')
-  const [timezone, setTimezone] = useState('UTC-5 (Eastern Time)')
-  const [scanInterval, setScanInterval] = useState('60')
+  const [orgName, setOrgName] = useState('')
+  const [timezone, setTimezone] = useState('UTC')
+  const [scanInterval, setScanInterval] = useState('30')
+  const [settingsLoaded, setSettingsLoaded] = useState(false)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+  const [settingsSaving, setSettingsSaving] = useState(false)
+  const [settingsError, setSettingsError] = useState<string | null>(null)
 
   // Notifications
   const [emailAlerts, setEmailAlerts] = useState(true)
@@ -300,7 +327,86 @@ export function SettingsPage() {
       })
   }, [section])
 
-  function handleSave() {
+  useEffect(() => {
+    if (!admin) return
+    let cancelled = false
+    setSettingsLoaded(false)
+    setSettingsLoading(true)
+    setSettingsError(null)
+    getOrganizationSettings()
+      .then(settings => {
+        if (cancelled) return
+        setOrgName(settings.fleet_name)
+        setTimezone(settings.timezone)
+        setOrganizationTimezone(settings.timezone)
+        setScanInterval(String(settings.scan_interval_minutes))
+        setRtpRequired(settings.require_realtime_protection)
+        setTamperRequired(settings.require_tamper_protection)
+        setMaxDefinitionAge(String(settings.max_definition_age_days))
+        setMaxCriticalPatches(String(settings.max_missing_critical_patches))
+        setDomainRequired(settings.require_domain_join)
+        setSettingsLoaded(true)
+      })
+      .catch(error => {
+        if (!cancelled) setSettingsError(error instanceof Error ? error.message : 'Unable to load organization settings')
+      })
+      .finally(() => {
+        if (!cancelled) setSettingsLoading(false)
+      })
+    return () => { cancelled = true }
+  }, [admin])
+
+  async function handleSave() {
+    setSaved(false)
+    if (section === 'general' || section === 'security') {
+      const interval = Number(scanInterval)
+      const definitionAge = Number(maxDefinitionAge)
+      const criticalPatches = Number(maxCriticalPatches)
+      if (section === 'general' && (!Number.isInteger(interval) || interval < 1 || interval > 1440)) {
+        setSettingsError('Scan interval must be a whole number between 1 and 1440 minutes.')
+        return
+      }
+      if (section === 'security' && (!Number.isInteger(definitionAge) || definitionAge < 0 || definitionAge > 365)) {
+        setSettingsError('Maximum definition age must be a whole number between 0 and 365 days.')
+        return
+      }
+      if (section === 'security' && (!Number.isInteger(criticalPatches) || criticalPatches < 0 || criticalPatches > 10000)) {
+        setSettingsError('Maximum missing critical patches must be a whole number between 0 and 10000.')
+        return
+      }
+
+      setSettingsSaving(true)
+      setSettingsError(null)
+      try {
+        const settings = await updateOrganizationSettings(section === 'general'
+          ? { timezone, scan_interval_minutes: interval }
+          : {
+              require_realtime_protection: rtpRequired,
+              require_tamper_protection: tamperRequired,
+              max_definition_age_days: definitionAge,
+              max_missing_critical_patches: criticalPatches,
+              require_domain_join: domainRequired,
+            })
+        setOrgName(settings.fleet_name)
+        if (section === 'general') {
+          setTimezone(settings.timezone)
+          setOrganizationTimezone(settings.timezone)
+          setScanInterval(String(settings.scan_interval_minutes))
+        } else {
+          setRtpRequired(settings.require_realtime_protection)
+          setTamperRequired(settings.require_tamper_protection)
+          setMaxDefinitionAge(String(settings.max_definition_age_days))
+          setMaxCriticalPatches(String(settings.max_missing_critical_patches))
+          setDomainRequired(settings.require_domain_join)
+        }
+      } catch (error) {
+        setSettingsError(error instanceof Error ? error.message : 'Unable to save organization settings')
+        return
+      } finally {
+        setSettingsSaving(false)
+      }
+    }
+
     setSaved(true)
     setTimeout(() => setSaved(false), 2200)
   }
@@ -386,25 +492,30 @@ export function SettingsPage() {
           {section === 'account' && <AccountSection />}
 
           {section === 'general' && (
+            <>
+            {settingsError && <p role="alert" className="text-[12px] text-status-critical">{settingsError}</p>}
+            {settingsLoading && <p className="text-[12px] text-muted-foreground">Loading organization settings...</p>}
             <SectionCard title="General Settings">
-              <SettingRow label="Fleet Name" description="Display name for this fleet.">
-                <TextField value={orgName} onChange={setOrgName} />
+              <SettingRow label="Fleet Name" description="Set by the platform manager for this organization.">
+                <input value={orgName} readOnly aria-readonly="true" className={cn(inputBase, 'w-full sm:w-64')} />
               </SettingRow>
-              <SettingRow label="Timezone" description="Used for report timestamps and scheduling.">
+              <SettingRow label="Timezone" description="Used to display platform timestamps and generated report times.">
                 <select
                   value={timezone}
                   onChange={e => setTimezone(e.target.value)}
                   className={cn(inputBase, 'w-full sm:w-64')}
                 >
-                  {['UTC-8 (Pacific Time)', 'UTC-7 (Mountain Time)', 'UTC-6 (Central Time)', 'UTC-5 (Eastern Time)', 'UTC+0 (UTC)', 'UTC+1 (CET)'].map(tz => (
-                    <option key={tz} value={tz}>{tz}</option>
+                  {TIMEZONES.map(([zone, label]) => (
+                    <option key={zone} value={zone}>{label} ({zone})</option>
                   ))}
+                  {!TIMEZONES.some(([zone]) => zone === timezone) && <option value={timezone}>{timezone}</option>}
                 </select>
               </SettingRow>
-              <SettingRow label="Scan Interval (minutes)" description="How frequently agents report device status.">
-                <TextField value={scanInterval} onChange={setScanInterval} type="number" />
+              <SettingRow label="Scan Interval (minutes)" description="How often agents run compliance scans; telemetry inventory continues every 5 minutes.">
+                <TextField value={scanInterval} onChange={setScanInterval} type="number" min={1} max={1440} />
               </SettingRow>
             </SectionCard>
+            </>
           )}
 
           {section === 'notifications' && (
@@ -430,7 +541,10 @@ export function SettingsPage() {
           )}
 
           {section === 'security' && (
-            <SectionCard title="Security Policies" description="Define thresholds that determine compliance pass/fail status.">
+            <>
+            {settingsError && <p role="alert" className="text-[12px] text-status-critical">{settingsError}</p>}
+            {settingsLoading && <p className="text-[12px] text-muted-foreground">Loading organization settings...</p>}
+            <SectionCard title="Security Policies" description="Policies are sent to enrolled agents and determine compliance results.">
               <SettingRow label="Require Real-time Protection" description="Devices with RTP disabled are marked critical.">
                 <Toggle checked={rtpRequired} onChange={setRtpRequired} />
               </SettingRow>
@@ -438,15 +552,16 @@ export function SettingsPage() {
                 <Toggle checked={tamperRequired} onChange={setTamperRequired} />
               </SettingRow>
               <SettingRow label="Max Definition Age (days)" description="Definitions older than this are flagged as stale.">
-                <TextField value={maxDefinitionAge} onChange={setMaxDefinitionAge} type="number" />
+                <TextField value={maxDefinitionAge} onChange={setMaxDefinitionAge} type="number" min={0} max={365} />
               </SettingRow>
               <SettingRow label="Max Missing Critical Patches" description="Devices exceeding this count are marked critical.">
-                <TextField value={maxCriticalPatches} onChange={setMaxCriticalPatches} type="number" />
+                <TextField value={maxCriticalPatches} onChange={setMaxCriticalPatches} type="number" min={0} max={10000} />
               </SettingRow>
               <SettingRow label="Require Domain Join" description="Non-domain devices are flagged as warning.">
                 <Toggle checked={domainRequired} onChange={setDomainRequired} />
               </SettingRow>
             </SectionCard>
+            </>
           )}
 
           {section === 'api' && (
@@ -470,7 +585,7 @@ export function SettingsPage() {
                       <p className="truncate text-[13px] font-medium text-foreground">{key.name}</p>
                       <p className="mt-0.5 text-[12px] text-muted-foreground">
                         {key.key_prefix}•••••••• •••••
-                        {key.expires_at ? ` • Expires ${new Date(key.expires_at).toLocaleDateString()}` : ' • No expiry'}
+                        {key.expires_at ? ` • Expires ${formatOrganizationDate(key.expires_at, { dateStyle: 'medium' })}` : ' • No expiry'}
                       </p>
                       {key.raw_key && (
                         <div className="mt-2.5 rounded-md bg-status-warning/10 p-2.5">
@@ -510,7 +625,7 @@ export function SettingsPage() {
                         <p className="truncate font-mono text-[12px] text-foreground">{token.token}</p>
                         <p className="mt-0.5 text-[12px] text-muted-foreground">
                           {token.description || 'No description'}
-                          {token.expires_at ? ` • Expires ${new Date(token.expires_at).toLocaleDateString()}` : ' • No expiry'}
+                          {token.expires_at ? ` • Expires ${formatOrganizationDate(token.expires_at, { dateStyle: 'medium' })}` : ' • No expiry'}
                         </p>
                       </CredentialRow>
                     ))}
@@ -526,6 +641,7 @@ export function SettingsPage() {
               <button
                 type="button"
                 onClick={handleSave}
+                disabled={(section === 'general' || section === 'security') && (!admin || !settingsLoaded || settingsLoading || settingsSaving)}
                 className={cn(
                   'inline-flex h-9 items-center gap-2 rounded-md px-4 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand/40',
                   saved
@@ -534,7 +650,7 @@ export function SettingsPage() {
                 )}
               >
                 <Save size={14} strokeWidth={2} />
-                {saved ? 'Saved!' : 'Save Changes'}
+                {settingsSaving ? 'Saving...' : saved ? 'Saved!' : 'Save Changes'}
               </button>
             </div>
           )}
@@ -614,7 +730,7 @@ function AccountSection() {
         <span className="text-[12px] font-medium text-status-good">Signed in</span>
       </SettingRow>
       <SettingRow label="Last login" description="Most recent successful sign-in.">
-        <span className="text-[12px] text-muted-foreground">{admin.last_login ? new Date(admin.last_login).toLocaleString() : '—'}</span>
+        <span className="text-[12px] text-muted-foreground">{admin.last_login ? formatOrganizationDate(admin.last_login) : '—'}</span>
       </SettingRow>
       <SettingRow label="Sign out" description="End your session on this browser.">
         <button

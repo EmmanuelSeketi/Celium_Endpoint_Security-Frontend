@@ -46,6 +46,17 @@ export type PlatformStats = {
 
 export type PlatformAdmin = Admin & { organization_name: string }
 
+export type OrganizationSettings = {
+  fleet_name: string
+  timezone: string
+  scan_interval_minutes: number
+  require_realtime_protection: boolean
+  require_tamper_protection: boolean
+  max_definition_age_days: number
+  max_missing_critical_patches: number
+  require_domain_join: boolean
+}
+
 type LoginResponse = {
   token: string
   admin: Admin
@@ -223,6 +234,19 @@ export async function registerInitialAdmin(input: { name: string; email: string;
 export async function login(input: { email: string; password: string }) {
   const result = await request<ApiSuccess<LoginResponse>>('/auth/login', {
     method: 'POST',
+    body: JSON.stringify(input),
+  })
+  return result.data
+}
+
+export async function getOrganizationSettings() {
+  const result = await authenticatedRequest<ApiSuccess<OrganizationSettings>>('/organization/settings')
+  return result.data
+}
+
+export async function updateOrganizationSettings(input: Partial<Omit<OrganizationSettings, 'fleet_name'>>) {
+  const result = await authenticatedRequest<ApiSuccess<OrganizationSettings>>('/organization/settings', {
+    method: 'PUT',
     body: JSON.stringify(input),
   })
   return result.data

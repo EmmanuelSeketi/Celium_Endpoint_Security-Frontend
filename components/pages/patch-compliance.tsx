@@ -1,7 +1,7 @@
 'use client'
 
 import { useMemo, useState, useEffect } from 'react'
-import { format, formatDistanceToNow } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import { AlertTriangle, CheckCircle2, Clock, Search, ShieldAlert, AlertCircle, RefreshCw, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { devices as mockDevices } from '@/lib/mock-data'
 import type { Device } from '@/lib/types'
@@ -9,6 +9,7 @@ import { SectionCard } from '@/components/ui/section-card'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { FailingChecksPieChart } from '@/components/ui/charts'
 import { cn } from '@/lib/utils'
+import { formatOrganizationDate } from '@/lib/organization-time'
 import { STATUS_COLORS } from '@/lib/theme'
 import { useDataMode } from '@/lib/data-mode-provider'
 import { getDevices, getDeviceCommandStatus, queueUpdateCommand, waitForDeviceCommand, type ManagedDevice } from '@/lib/api-client'
@@ -462,7 +463,7 @@ export function PatchCompliancePage() {
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Update scan</p>
                     <p className="mt-2 text-[13px] font-semibold" style={{ color: scanStatusColor }}>{scanStatusLabel}</p>
                     <p className="mt-1 text-[11px] text-muted-foreground">
-                      Last scan {Number.isFinite(lastScan) ? format(new Date(lastScan), 'MMM d, yyyy HH:mm') : 'Never'}
+                      Last scan {Number.isFinite(lastScan) ? formatOrganizationDate(lastScan) : 'Never'}
                     </p>
                   </div>
                   <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
@@ -511,7 +512,7 @@ export function PatchCompliancePage() {
                     </p>
                     {device.os === 'Windows' && <p className="mt-1 text-[11px] text-muted-foreground">Get the latest updates as soon as they’re available, including non-security updates, fixes, and improvements.</p>}
                     {Number.isFinite(pauseUntil) && (
-                      <p className="mt-1 text-[11px] text-muted-foreground">Paused until {format(new Date(pauseUntil), 'MMM d, yyyy')}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Paused until {formatOrganizationDate(pauseUntil, { dateStyle: 'medium' })}</p>
                     )}
                   </div>
                   <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
@@ -545,7 +546,7 @@ export function PatchCompliancePage() {
                         <div key={index} className="space-y-1 px-3 py-2.5">
                           <p className="text-[12px] font-medium text-foreground">{String(item.title ?? 'Windows Update')}</p>
                           <p className="text-[11px] text-muted-foreground">
-                            {String(item.status ?? 'Unknown')} · {eventDate && Number.isFinite(eventDate.getTime()) ? format(eventDate, 'MMM d, yyyy HH:mm') : 'Unknown date'}
+                            {String(item.status ?? 'Unknown')} · {eventDate && Number.isFinite(eventDate.getTime()) ? formatOrganizationDate(eventDate) : 'Unknown date'}
                           </p>
                           {Boolean(eventDescription) && (
                             <p className="text-[11px] text-muted-foreground">{String(eventDescription)}</p>

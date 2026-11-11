@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
-import { formatDistanceToNow, format } from 'date-fns'
+import { formatDistanceToNow } from 'date-fns'
 import { CheckCircle2, XCircle, AlertTriangle, ArrowUpRight, ArrowDownRight, Users, Clock, Eye, X } from 'lucide-react'
 import { adDomainStatus as mockADStatus, authActivityTrend as mockAuthActivity } from '@/lib/mock-data'
 import type { ADAccountRecord, KerberosEventRecord } from '@/lib/types'
@@ -10,6 +10,7 @@ import { SectionCard } from '@/components/ui/section-card'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from 'recharts'
 import { cn } from '@/lib/utils'
+import { formatOrganizationDate } from '@/lib/organization-time'
 import { STATUS_COLORS } from '@/lib/theme'
 import { useDataMode } from '@/lib/data-mode-provider'
 import { getADDomainStatus, getAuthActivity, type ADDomainStatus, type AuthActivity } from '@/lib/api-client'
@@ -506,8 +507,8 @@ export function ActiveDirectoryPage() {
             <DetailField label="Account" value={selectedStaleAccount.accountName} mono />
             <DetailField label="Display name" value={selectedStaleAccount.displayName ?? 'Not provided'} />
             <DetailField label="Account type" value={selectedStaleAccount.accountType} />
-            <DetailField label="Last logon" value={format(new Date(selectedStaleAccount.lastLogon), 'MMM d, yyyy HH:mm')} />
-            <DetailField label="Password last set" value={selectedStaleAccount.passwordLastSet ? format(new Date(selectedStaleAccount.passwordLastSet), 'MMM d, yyyy HH:mm') : 'Not provided'} />
+            <DetailField label="Last logon" value={formatOrganizationDate(selectedStaleAccount.lastLogon)} />
+            <DetailField label="Password last set" value={selectedStaleAccount.passwordLastSet ? formatOrganizationDate(selectedStaleAccount.passwordLastSet) : 'Not provided'} />
             <DetailField label="Password never expires" value={selectedStaleAccount.passwordNeverExpires ? 'Yes' : 'No'} />
             <DetailField label="Organizational unit" value={selectedStaleAccount.organizationalUnit} mono />
             <DetailField label="Distinguished name" value={selectedStaleAccount.distinguishedName} mono />
@@ -525,7 +526,7 @@ export function ActiveDirectoryPage() {
             <DetailField label="Client host" value={selectedKerberosEvent.clientHost} mono />
             <DetailField label="Client IP" value={selectedKerberosEvent.clientIp} mono />
             <DetailField label="Source domain controller" value={selectedKerberosEvent.sourceDomainController} mono />
-            <DetailField label="Event timestamp" value={format(new Date(selectedKerberosEvent.timestamp), 'MMM d, yyyy HH:mm:ss')} />
+            <DetailField label="Event timestamp" value={formatOrganizationDate(selectedKerberosEvent.timestamp, { dateStyle: 'medium', timeStyle: 'medium' })} />
             <DetailField label="Detection reason" value={selectedKerberosEvent.detectionReason ?? 'No anomaly reason recorded'} />
           </div>
         </ADDetailDrawer>
