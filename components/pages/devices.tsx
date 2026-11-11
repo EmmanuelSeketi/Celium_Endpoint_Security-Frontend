@@ -24,6 +24,11 @@ function isUpdateInventoryStale(lastUpdateCheck: string, scanStatus?: Device['pa
   return (scanStatus !== undefined && scanStatus !== 'succeeded') || !Number.isFinite(checkedAt) || Date.now() - checkedAt > UPDATE_INVENTORY_STALE_AFTER_MS
 }
 
+function hasPendingRestart(device: Device) {
+  return device.patchStatus.pendingReboot
+    || device.patchStatus.availableUpdates?.some(update => update.status === 'pending_restart' || update.rebootRequired) === true
+}
+
 function managedDeviceToDevice(managedDevice: ManagedDevice): Device {
   const lastSeen = managedDevice.last_checkin ?? managedDevice.created_at
   const complianceScore = managedDevice.compliance_score ?? 0
@@ -72,6 +77,17 @@ function managedDeviceToDevice(managedDevice: ManagedDevice): Device {
       updateScanStatus: managedDevice.patch_status?.update_scan_status ?? 'unknown',
       updateScanError: managedDevice.patch_status?.update_scan_error,
       osEol: managedDevice.patch_status?.os_eol ?? false,
+      availableUpdates: managedDevice.available_updates?.map(update => ({
+        updateId: update.update_id,
+        revision: update.revision,
+        title: update.title,
+        status: update.status,
+        downloaded: update.downloaded,
+        rebootRequired: update.reboot_required,
+        severity: update.severity,
+        categories: update.categories ?? [],
+        sizeBytes: update.size_bytes ?? 0,
+      })),
       updateHistory: managedDevice.update_history,
       updatesAutomatic: managedDevice.updates_automatic,
       updatesPauseUntil: managedDevice.updates_pause_until,
@@ -316,12 +332,14 @@ interface DeviceDrawerProps {
 }
 
 function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
+  const { mode } = useDataMode()
   const [tab, setTab] = useState<'overview' | 'checks' | 'updates' | 'malware' | 'history'>('overview')
   const [checks, setChecks] = useState<DeviceCheck[]>([])
   const [checksLoading, setChecksLoading] = useState(false)
   const [scanHistory, setScanHistory] = useState<DeviceScanHistory[]>([])
   const [scanHistoryLoading, setScanHistoryLoading] = useState(false)
   const [commandMessage, setCommandMessage] = useState<string | null>(null)
+  const [commandStatusUnavailable, setCommandStatusUnavailable] = useState(false)
   const [activeCommandId, setActiveCommandId] = useState<string | null>(null)
   const [cancelRequested, setCancelRequested] = useState(false)
   const [checkProgress, setCheckProgress] = useState<Record<string, 'passed' | 'failed' | 'error'>>({})
@@ -335,10 +353,41 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
   const [protectionHistoryOpen, setProtectionHistoryOpen] = useState(false)
   const [expandedProtectionId, setExpandedProtectionId] = useState<string | null>(null)
   const onRefreshRef = useRef(onRefresh)
+  const requestedCommandId = useRef<string | null>(null)
+  const handledCommandIds = useRef(new Set<string>())
+  const refreshCommandResultsRef = useRef(refreshCommandResults)
 
   useEffect(() => {
     onRefreshRef.current = onRefresh
   }, [onRefresh])
+
+  async function refreshCommandResults(commandId: string, command: string) {
+    if (handledCommandIds.current.has(commandId)) return
+    handledCommandIds.current.add(commandId)
+    if (handledCommandIds.current.size > 50) {
+      const oldestCommandId = handledCommandIds.current.values().next().value
+      if (oldestCommandId) handledCommandIds.current.delete(oldestCommandId)
+    }
+
+    try {
+      await onRefreshRef.current()
+      if (command === 'scan_checks') {
+        const [latestChecks, latestHistory] = await Promise.all([
+          getDeviceChecks(device.id),
+          getDeviceScanHistory(device.id),
+        ])
+        setChecks(latestChecks)
+        setScanHistory(latestHistory)
+        setCheckProgress({})
+      }
+    } catch (error) {
+      setCommandMessage(`Command finished, but the latest endpoint results could not be refreshed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  useEffect(() => {
+    refreshCommandResultsRef.current = refreshCommandResults
+  })
 
   useEffect(() => {
     setChecksLoading(true)
@@ -349,27 +398,51 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
   }, [device.id])
 
   useEffect(() => {
+    if (mode === 'demo') return
     let cancelled = false
-    let trackingUpdateCommand = false
+    let trackedCommandId: string | null = null
     const refreshCommandStatus = async () => {
       try {
         const status = await getDeviceCommandStatus(device.id)
         if (cancelled) return
-        const isUpdateCommand = status.command === 'check_updates' || status.command === 'install_updates'
+        setCommandStatusUnavailable(false)
         const isActive = status.status === 'queued' || status.status === 'running'
-        if (isUpdateCommand && isActive) {
-          trackingUpdateCommand = true
+        if (status.command_id && isActive) {
+          trackedCommandId = status.command_id
+          requestedCommandId.current = status.command_id
           setActiveCommandId(status.command_id)
           setUpdateAction(status.command)
-          setCommandMessage(status.status === 'running' ? 'Update command is running on the endpoint…' : 'Update command is queued for the endpoint agent…')
-        } else if (trackingUpdateCommand) {
-          trackingUpdateCommand = false
+          const label = status.command === 'quick_scan'
+            ? 'Quick malware scan'
+            : status.command === 'scan_checks'
+            ? 'Compliance checks'
+            : status.command === 'check_updates' || status.command === 'install_updates'
+            ? 'Update command'
+            : 'Update settings'
+          setCommandMessage(status.status === 'running' ? `${label} is running on the endpoint…` : `${label} is queued for the endpoint agent…`)
+          const progress = status.result?.match(/^check_progress:([^:]+):(passed|failed|error)$/)
+          if (progress) setCheckProgress(current => ({ ...current, [progress[1]]: progress[2] as 'passed' | 'failed' | 'error' }))
+        } else if (
+          status.command_id
+          && (status.command_id === trackedCommandId || status.command_id === requestedCommandId.current)
+          && ['succeeded', 'failed', 'cancelled'].includes(status.status)
+        ) {
+          trackedCommandId = null
+          requestedCommandId.current = null
           setActiveCommandId(null)
           setUpdateAction(null)
-          setCommandMessage(status.result || (status.status === 'succeeded' ? 'Update command completed.' : 'Update command did not complete.'))
-          if (status.status === 'succeeded') await onRefreshRef.current()
+          setCancelRequested(false)
+          if (status.command === 'automatic_on') setAutoUpdateEnabled(status.status === 'succeeded')
+          if (status.command === 'automatic_off') setAutoUpdateEnabled(status.status !== 'succeeded')
+          setCommandMessage(status.result || (status.status === 'succeeded' ? 'Command completed.' : `Command ${status.status}.`))
+          await refreshCommandResultsRef.current(status.command_id, status.command)
         }
-      } catch {}
+      } catch (error) {
+        if (!cancelled) {
+          setCommandStatusUnavailable(true)
+          setCommandMessage(`Unable to check endpoint command status. Retrying automatically. ${error instanceof Error ? error.message : ''}`.trim())
+        }
+      }
     }
 
     void refreshCommandStatus()
@@ -378,7 +451,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [device.id])
+  }, [device.id, mode])
 
   useEffect(() => {
     setAutoUpdateEnabled(device.patchStatus.updatesAutomatic ?? false)
@@ -417,32 +490,43 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
     'chk-028': 'warning',
   }
   const defColor = getDefinitionAgeColor(device.malwareStatus.definitionAge)
+  const commandIsActive = mode === 'demo' || updateAction !== null || commandStatusUnavailable
   const updateInventoryStale = isUpdateInventoryStale(device.patchStatus.lastUpdateCheck, device.patchStatus.updateScanStatus)
+  const availableUpdates = device.patchStatus.availableUpdates ?? []
+  const restartRequired = hasPendingRestart(device)
   const updateState = device.patchStatus.osEol
     ? { label: 'End of support', color: STATUS_COLORS.critical }
+    : restartRequired
+    ? { label: 'Restart required', color: STATUS_COLORS.warning }
     : device.patchStatus.updateScanStatus === 'failed'
     ? { label: 'Update scan failed', color: STATUS_COLORS.critical }
     : updateInventoryStale
     ? { label: 'Inventory stale', color: 'var(--muted-foreground)' }
-    : device.patchStatus.pendingReboot
-    ? { label: 'Restart required', color: STATUS_COLORS.warning }
     : device.patchStatus.missingCritical > 0
     ? { label: 'Security updates missing', color: STATUS_COLORS.critical }
     : device.patchStatus.missingTotal > 0
     ? { label: 'Updates available', color: STATUS_COLORS.warning }
     : { label: "You're up to date", color: 'var(--status-good)' }
   const sendUpdateCommand = async (command: string, pauseUntil?: string) => {
+    if (mode === 'demo') {
+      setCommandMessage('Endpoint commands are available only in live data mode.')
+      return
+    }
+    let commandId: string | null = null
+    let completed = false
     setUpdateAction(command)
     setCommandMessage(null)
     try {
       const queued = await queueUpdateCommand(device.id, command, pauseUntil)
+      commandId = queued.command_id
+      requestedCommandId.current = commandId
       setActiveCommandId(queued.command_id)
       if (command === 'scan_checks') {
         setCheckProgress({})
         setCancelRequested(false)
       }
       setCommandMessage('Command queued. Waiting for the endpoint agent to start…')
-      const executionTimeout = command === 'install_updates'
+      const executionTimeout = command === 'install_updates' || command.startsWith('install_update:')
         ? 2 * 60 * 60 * 1000
         : command === 'quick_scan'
         ? 2 * 60 * 60 * 1000
@@ -451,38 +535,45 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
         : 10 * 60 * 1000
       const progressPollInterval = command === 'scan_checks' ? 500 : 2000
       const outcome = await waitForDeviceCommand(device.id, queued.command_id, status => {
-        const label = command === 'quick_scan' ? 'Quick malware scan' : command === 'scan_checks' ? 'Compliance checks' : command === 'check_updates' || command === 'check' ? 'Windows Update scan' : command === 'install_updates' ? 'Update installation' : 'Update policy change'
+        const label = command === 'quick_scan' ? 'Quick malware scan' : command === 'scan_checks' ? 'Compliance checks' : command === 'check_updates' || command === 'check' ? 'Windows Update scan' : command === 'install_updates' || command.startsWith('install_update:') ? 'Update installation' : command === 'restart_now' ? 'Endpoint restart' : 'Update policy change'
         const progress = status.result?.match(/^check_progress:([^:]+):(passed|failed|error)$/)
+        const updateProgress = status.result?.match(/^update_progress:[0-9a-f-]{36}:(downloading|installing)$/i)
         if (progress) setCheckProgress(current => ({ ...current, [progress[1]]: progress[2] as 'passed' | 'failed' | 'error' }))
-        setCommandMessage(status.status === 'running' ? `${label} running on endpoint…` : 'Command queued. Waiting for the endpoint agent to start…')
+        setCommandMessage(status.status === 'running'
+          ? updateProgress ? `Windows Update ${updateProgress[1]} on endpoint…` : `${label} running on endpoint…`
+          : 'Command queued. Waiting for the endpoint agent to start…')
       }, progressPollInterval, executionTimeout)
       if (!outcome) {
-        setCommandMessage('Still waiting for the endpoint. Check that its agent is online.')
+        setCommandMessage('Still waiting for the endpoint agent. Command status and results will refresh automatically.')
       } else if (outcome.status === 'failed') {
+        completed = true
         setCommandMessage(outcome.result || 'The endpoint could not complete this action.')
+        await refreshCommandResults(queued.command_id, command)
       } else if (outcome.status === 'cancelled') {
+        completed = true
         setCommandMessage(outcome.result || 'Checks cancelled.')
-        if (command === 'scan_checks') {
-          await onRefresh()
-          const [latestChecks, latestHistory] = await Promise.all([getDeviceChecks(device.id), getDeviceScanHistory(device.id)])
-          setChecks(latestChecks)
-          setScanHistory(latestHistory)
-        }
+        await refreshCommandResults(queued.command_id, command)
       } else {
+        completed = true
         setCommandMessage(outcome.result || 'Completed just now.')
         if (command === 'automatic_on') setAutoUpdateEnabled(true)
         if (command === 'automatic_off') setAutoUpdateEnabled(false)
-        await onRefresh()
-        if (command === 'scan_checks') {
-          const [latestChecks, latestHistory] = await Promise.all([getDeviceChecks(device.id), getDeviceScanHistory(device.id)])
-          setChecks(latestChecks)
-          setScanHistory(latestHistory)
-          setCheckProgress({})
-        }
+        await refreshCommandResults(queued.command_id, command)
       }
     } catch (error) {
       setCommandMessage(error instanceof Error ? error.message : 'Unable to queue command')
-    } finally { setUpdateAction(null); setActiveCommandId(null); setCancelRequested(false) }
+    } finally {
+      if (!commandId || completed) {
+        if (requestedCommandId.current === commandId) requestedCommandId.current = null
+        setUpdateAction(null)
+        setActiveCommandId(null)
+        setCancelRequested(false)
+      }
+    }
+  }
+  const requestRestart = () => {
+    if (!window.confirm(`Restart ${device.name} now? The endpoint will restart in about 60 seconds.`)) return
+    void sendUpdateCommand('restart_now')
   }
   async function cancelComplianceScan() {
     if (!activeCommandId) return
@@ -584,7 +675,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                   <h3 className="text-[14px] font-semibold text-foreground">Endpoint checks</h3>
                   <p className="mt-1 text-[12px] text-muted-foreground">Latest compliance result reported by this device.</p>
                 </div>
-                <div className="flex items-center gap-3"><span className="font-mono text-[12px] text-muted-foreground">{device.passedChecks} passed · {device.failedChecks} failed · {device.errorChecks ?? 0} errors</span>{updateAction === 'scan_checks' ? <button type="button" disabled={cancelRequested} onClick={() => void cancelComplianceScan()} className="rounded-md border border-status-critical px-3 py-1.5 text-[12px] font-medium text-status-critical disabled:opacity-50">{cancelRequested ? 'Cancelling…' : 'Cancel checks'}</button> : <button type="button" onClick={() => void sendUpdateCommand('scan_checks')} className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white"><Play size={13} />Run checks</button>}</div>
+                <div className="flex items-center gap-3"><span className="font-mono text-[12px] text-muted-foreground">{device.passedChecks} passed · {device.failedChecks} failed · {device.errorChecks ?? 0} errors</span>{updateAction === 'scan_checks' ? <button type="button" disabled={cancelRequested} onClick={() => void cancelComplianceScan()} className="rounded-md border border-status-critical px-3 py-1.5 text-[12px] font-medium text-status-critical disabled:opacity-50">{cancelRequested ? 'Cancelling…' : 'Cancel checks'}</button> : <button type="button" disabled={commandIsActive} onClick={() => void sendUpdateCommand('scan_checks')} className="inline-flex items-center gap-1.5 rounded-md bg-brand px-3 py-1.5 text-[12px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"><Play size={13} />Run checks</button>}</div>
               </div>
               {commandMessage && <p className="text-[12px] text-muted-foreground">{commandMessage}</p>}
               {updateAction === 'scan_checks' && <p className="flex items-center gap-2 text-[11px] font-medium text-brand"><Loader2 size={12} className="animate-spin" />Check {Math.min(currentCheckNumber, checkExecutionOrder.length)} of {checkExecutionOrder.length}{currentCheckId ? ` · ${checks.find(check => check.check_id === currentCheckId)?.title ?? currentCheckId}` : ' · Finalizing results'}</p>}
@@ -765,7 +856,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                       </div>
                       <button
                         type="button"
-                        disabled={updateAction === 'check_updates'}
+                        disabled={commandIsActive}
                         onClick={() => void sendUpdateCommand('check_updates')}
                         className="shrink-0 rounded-md bg-[#303030] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#3b3b3b]"
                       >
@@ -777,11 +868,74 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                       <div className="rounded-md border border-status-critical/30 bg-status-critical/5 px-4 py-3 text-[12px] text-status-critical">
                         Update scan failed{device.patchStatus.updateScanError ? `: ${device.patchStatus.updateScanError}` : '.'}
                       </div>
+                    ) : device.patchStatus.updateScanStatus === 'succeeded' && device.patchStatus.updateScanError ? (
+                      <div className="rounded-md border border-status-warning/30 bg-status-warning/5 px-4 py-3 text-[12px] text-muted-foreground">
+                        Partial Windows Update results{device.patchStatus.updateScanError ? `: ${device.patchStatus.updateScanError}` : '.'}
+                      </div>
                     ) : updateInventoryStale ? (
                       <div className="rounded-md border border-border bg-surface px-4 py-3 text-[12px] text-muted-foreground shadow-sm">
                         Available updates are unverified until this endpoint completes a fresh update scan.
                       </div>
                     ) : null}
+
+                    {availableUpdates.length > 0 && (
+                      <section aria-labelledby="device-available-updates">
+                        <div className="mb-2 flex items-center justify-between gap-3">
+                          <h3 id="device-available-updates" className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Windows updates</h3>
+                          <span className="text-[11px] text-muted-foreground">{availableUpdates.length} reported</span>
+                        </div>
+                        <div className="divide-y divide-border overflow-hidden rounded-md border border-border bg-surface shadow-sm">
+                          {availableUpdates.map(update => {
+                            const pendingRestart = update.status === 'pending_restart' || update.rebootRequired
+                            const isSystemRestart = update.updateId === 'system-restart-required'
+                            const updateCommand = `install_update:${update.updateId}`
+                            const statusLabel = pendingRestart ? 'Pending restart' : update.downloaded ? 'Install' : 'Available'
+                            return (
+                              <div key={`${update.updateId}:${update.revision}`} className="flex items-start justify-between gap-3 px-3 py-3">
+                                <div className="min-w-0">
+                                  <p className="text-[12px] font-medium text-foreground">{update.title}</p>
+                                  <p className="mt-1 text-[11px] text-muted-foreground">
+                                    {[...update.categories, update.sizeBytes > 0 ? `${(update.sizeBytes / 1024 / 1024).toFixed(1)} MB` : null].filter(Boolean).join(' · ') || 'Windows Update'}
+                                  </p>
+                                </div>
+                                <div className="flex shrink-0 flex-col items-end gap-2">
+                                  <span className={cn('text-[11px] font-medium', pendingRestart ? 'text-status-warning' : update.downloaded ? 'text-brand' : 'text-muted-foreground')}>
+                                    {statusLabel}
+                                  </span>
+                                  {!pendingRestart && !isSystemRestart && (
+                                    <button
+                                      type="button"
+                                      disabled={commandIsActive || !/^[0-9a-f-]{36}$/i.test(update.updateId)}
+                                      onClick={() => void sendUpdateCommand(`install_update:${update.updateId}`)}
+                                      className="text-[11px] font-medium text-brand underline underline-offset-2 disabled:opacity-50"
+                                    >
+                                      {commandStatusUnavailable ? 'Status unavailable' : updateAction === updateCommand ? 'Installing…' : update.downloaded ? 'Install' : 'Download & install'}
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </section>
+                    )}
+
+                    {restartRequired && device.os === 'Windows' && (
+                      <div className="flex items-center justify-between gap-3 rounded-md border border-status-warning/30 bg-status-warning/5 px-4 py-3">
+                        <div>
+                          <p className="text-[12px] font-semibold text-status-warning">Restart required</p>
+                          <p className="mt-1 text-[11px] text-muted-foreground">Windows reports that a restart is needed to finish update installation.</p>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={commandIsActive}
+                          onClick={requestRestart}
+                          className="shrink-0 rounded-md bg-brand px-3 py-2 text-[11px] font-medium text-white disabled:opacity-50"
+                        >
+                          {commandStatusUnavailable ? 'Status unavailable' : updateAction === 'restart_now' ? 'Restarting…' : 'Restart now'}
+                        </button>
+                      </div>
+                    )}
 
                     {/* Available update banner */}
                     {hasMissing && updateBannerOpen && (
@@ -794,7 +948,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-3">
-                          <button type="button" disabled={updateAction === 'install_updates'} onClick={() => void sendUpdateCommand('install_updates')} className="text-[12px] font-medium text-brand hover:underline disabled:opacity-50">
+                          <button type="button" disabled={commandIsActive} onClick={() => void sendUpdateCommand('install_updates')} className="text-[12px] font-medium text-brand hover:underline disabled:opacity-50">
                             {updateAction === 'install_updates' ? 'Installing…' : 'Download and Install'}
                           </button>
                           <button type="button" onClick={() => setUpdateBannerOpen(false)} aria-label="Dismiss" className="text-black dark:text-white">
@@ -818,7 +972,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                           </div>
                           <button
                             type="button"
-                            disabled={updateAction === (autoUpdateEnabled ? 'automatic_off' : 'automatic_on')}
+                            disabled={commandIsActive}
                             role="switch"
                             aria-checked={autoUpdateEnabled}
                             onClick={() => { const next = !autoUpdateEnabled; void sendUpdateCommand(next ? 'automatic_on' : 'automatic_off') }}
@@ -840,7 +994,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                             {updatesPaused ? (
                               <button
                                 type="button"
-                                disabled={updateAction === 'resume'}
+                                disabled={commandIsActive}
                                 onClick={() => void sendUpdateCommand('resume')}
                                 className="shrink-0 rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-black dark:text-white transition-colors hover:bg-surface-hover disabled:opacity-50"
                               >
@@ -851,7 +1005,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                                 <input type="date" value={pauseDate} min={format(new Date(), 'yyyy-MM-dd')} onChange={event => setPauseDate(event.target.value)} className="h-7 rounded border border-border bg-card px-2 text-[11px] text-foreground" />
                                 <button
                                   type="button"
-                                  disabled={!pauseDate || updateAction === 'pause'}
+                                  disabled={!pauseDate || commandIsActive}
                                   onClick={() => pauseDate && void sendUpdateCommand('pause', new Date(`${pauseDate}T23:59:59`).toISOString())}
                                   className="shrink-0 rounded-md border border-border px-3 py-1.5 text-[12px] font-medium text-black dark:text-white transition-colors hover:bg-surface-hover disabled:opacity-50"
                                 >
@@ -947,7 +1101,7 @@ function DeviceDrawer({ device, onClose, onRefresh }: DeviceDrawerProps) {
                       {device.os === 'Windows' && (
                         <button
                           type="button"
-                            disabled={updateAction === 'quick_scan'}
+                            disabled={commandIsActive}
                             onClick={() => void sendUpdateCommand('quick_scan')}
                           className="shrink-0 rounded-md bg-[#303030] px-4 py-2 text-[12px] font-medium text-white transition-colors hover:bg-[#3b3b3b]"
                         >
@@ -1213,7 +1367,7 @@ export function DevicesPage() {
         <PageHeader
           title="Devices"
           description={`${allDevices.length} endpoints in the fleet.`}
-          className="pt-4"
+          className="mb-0"
         />
 
         <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">

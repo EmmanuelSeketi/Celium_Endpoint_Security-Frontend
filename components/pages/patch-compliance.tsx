@@ -2,10 +2,9 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { format, formatDistanceToNow } from 'date-fns'
-import { AlertTriangle, CheckCircle2, Clock, Search, ShieldAlert, AlertCircle, RefreshCw, X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, Clock, Search, ShieldAlert, AlertCircle, RefreshCw, X, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import { devices as mockDevices } from '@/lib/mock-data'
 import type { Device } from '@/lib/types'
-import { PageHeader } from '@/components/ui/page-header'
 import { SectionCard } from '@/components/ui/section-card'
 import { KpiCard } from '@/components/ui/kpi-card'
 import { FailingChecksPieChart } from '@/components/ui/charts'
@@ -39,20 +38,33 @@ function OSIcon({ os }: { os: 'Windows' | 'Mac' | 'Linux' }) {
 
 function getUpdateState(device: Device) {
   if (device.patchStatus.osEol) return { label: 'End of support', color: STATUS_COLORS.critical, icon: AlertTriangle }
+  if (hasPendingRestart(device)) return { label: 'Restart required', color: STATUS_COLORS.warning, icon: Clock }
   if (device.patchStatus.updateScanStatus === 'failed') return { label: 'Update scan failed', color: STATUS_COLORS.critical, icon: AlertTriangle }
   if (isInventoryStale(device)) return { label: 'Inventory stale', color: '#64748B', icon: RefreshCw }
-  if (device.patchStatus.pendingReboot) return { label: 'Restart required', color: STATUS_COLORS.warning, icon: Clock }
   if (device.patchStatus.missingCritical > 0) return { label: 'Security updates missing', color: STATUS_COLORS.critical, icon: ShieldAlert }
   if (device.patchStatus.missingTotal > 0) return { label: 'Updates available', color: STATUS_COLORS.warning, icon: AlertCircle }
   return { label: "You're up to date", color: STATUS_COLORS.compliant, icon: CheckCircle2 }
 }
 
 const INVENTORY_STALE_AFTER_MS = 60 * 60 * 1000
+const UPDATE_COMMANDS = ['check_updates', 'install_updates', 'restart_now', 'automatic_on', 'automatic_off'] as const
+type UpdateCommand = typeof UPDATE_COMMANDS[number] | `install_update:${string}`
+
+function isUpdateCommand(command: string): command is UpdateCommand {
+  return UPDATE_COMMANDS.some(updateCommand => updateCommand === command)
+    || /^install_update:[0-9a-f-]{36}$/i.test(command)
+}
 
 function isInventoryStale(device: Device, now = Date.now()) {
   const lastCheck = Date.parse(device.patchStatus.lastUpdateCheck)
-  const unknownScanStatus = device.patchStatus.updateScanStatus !== undefined && device.patchStatus.updateScanStatus !== 'succeeded'
+  const unknownScanStatus = device.patchStatus.updateScanStatus !== undefined
+    && device.patchStatus.updateScanStatus !== 'succeeded'
   return unknownScanStatus || !Number.isFinite(lastCheck) || now - lastCheck > INVENTORY_STALE_AFTER_MS
+}
+
+function hasPendingRestart(device: Device) {
+  return device.patchStatus.pendingReboot
+    || device.patchStatus.availableUpdates?.some(update => update.status === 'pending_restart' || update.rebootRequired) === true
 }
 
 function getInventoryAge(lastUpdateCheck: string) {
@@ -64,7 +76,7 @@ function getInventoryAge(lastUpdateCheck: string) {
 function getRiskRank(device: Device, now: number) {
   if (device.patchStatus.osEol) return 5
   if (!isInventoryStale(device, now) && device.patchStatus.missingCritical > 0) return 4
-  if (!isInventoryStale(device, now) && device.patchStatus.pendingReboot) return 3
+  if (hasPendingRestart(device)) return 3
   if (!isInventoryStale(device, now) && device.patchStatus.missingTotal > 0) return 2
   if (isInventoryStale(device, now)) return 1
   return 0
@@ -73,10 +85,10 @@ function getRiskRank(device: Device, now: number) {
 function getRemediationState(device: Device, now: number) {
   const stale = isInventoryStale(device, now)
   if (device.patchStatus.osEol) return 'End-of-support OS'
+  if (hasPendingRestart(device)) return 'Restart required'
   if (device.patchStatus.updateScanStatus === 'failed') return 'Update scan failed'
   if (!stale && device.patchStatus.missingCritical > 0) return 'Critical / important missing'
   if (stale) return 'Inventory stale (> 60m)'
-  if (device.patchStatus.pendingReboot) return 'Restart required'
   if (device.patchStatus.missingTotal > 0) return 'Other updates missing'
   return "You're up to date"
 }
@@ -90,14 +102,16 @@ export function PatchCompliancePage() {
   const [updateStateFilter, setUpdateStateFilter] = useState('')
   const [currentPage, setCurrentPage] = useState(1)
   const [selectedUpdateDevice, setSelectedUpdateDevice] = useState<Device | null>(null)
-  const [activeCommands, setActiveCommands] = useState<Record<string, { command: 'check_updates' | 'install_updates'; phase: 'queued' | 'running' }>>({})
+  const [activeCommands, setActiveCommands] = useState<Record<string, { command: UpdateCommand; phase: 'queued' | 'running' | 'downloading' | 'installing' | 'unreachable' }>>({})
   const [commandError, setCommandError] = useState<string | null>(null)
+  const [commandStatusError, setCommandStatusError] = useState<string | null>(null)
   const pageSize = 8
 
   useEffect(() => {
     if (mode === 'demo') {
       setApiDevices([])
       setLoadError(null)
+      setCommandStatusError(null)
       setLoading(false)
       return
     }
@@ -111,7 +125,7 @@ export function PatchCompliancePage() {
           if (!cancelled) setApiDevices(Array.isArray(devicesData) ? devicesData : [])
         })
         .catch(() => undefined)
-    }, 30_000)
+    }, 10_000)
     getDevices()
       .then(devicesData => {
         if (cancelled) return
@@ -166,6 +180,17 @@ export function PatchCompliancePage() {
         updateScanError: device.patch_status?.update_scan_error,
         osEol: device.patch_status?.os_eol ?? false,
         eolDate: device.patch_status?.eol_date,
+        availableUpdates: device.available_updates?.map(update => ({
+          updateId: update.update_id,
+          revision: update.revision,
+          title: update.title,
+          status: update.status,
+          downloaded: update.downloaded,
+          rebootRequired: update.reboot_required,
+          severity: update.severity,
+          categories: update.categories ?? [],
+          sizeBytes: update.size_bytes ?? 0,
+        })),
         updateHistory: device.update_history,
         updatesAutomatic: device.updates_automatic,
         updatesPauseUntil: device.updates_pause_until,
@@ -174,12 +199,19 @@ export function PatchCompliancePage() {
     }))
   }, [mode, apiDevices])
 
+  useEffect(() => {
+    setSelectedUpdateDevice(current => {
+      if (!current) return current
+      return devices.find(device => device.id === current.id) ?? current
+    })
+  }, [devices])
+
   const stats = useMemo(() => {
     const freshDevices = devices.filter(device => !isInventoryStale(device))
-    const fullyPatchedCount = freshDevices.filter(device => device.patchStatus.missingCritical === 0 && device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot && !device.patchStatus.osEol).length
+    const fullyPatchedCount = freshDevices.filter(device => device.patchStatus.missingCritical === 0 && device.patchStatus.missingTotal === 0 && !hasPendingRestart(device) && !device.patchStatus.osEol).length
     return {
       patchCompliance: freshDevices.length === 0 ? 0 : Math.round((fullyPatchedCount / freshDevices.length) * 100),
-      pendingReboot: freshDevices.filter(device => device.patchStatus.pendingReboot).length,
+      pendingReboot: devices.filter(hasPendingRestart).length,
       eolDevices: devices.filter(device => device.patchStatus.osEol).length,
       missingCritical: freshDevices.reduce((sum, device) => sum + device.patchStatus.missingCritical, 0),
       updateScanFailures: devices.filter(device => device.patchStatus.updateScanStatus === 'failed').length,
@@ -235,32 +267,57 @@ export function PatchCompliancePage() {
   const totalPages = Math.max(1, Math.ceil(filteredDevices.length / pageSize))
   const pagedDevices = filteredDevices.slice((currentPage - 1) * pageSize, currentPage * pageSize)
   const visibleDeviceIds = pagedDevices.map(device => device.id).join('|')
+  const availableUpdateRows = devices.flatMap(device => (device.patchStatus.availableUpdates ?? []).map(update => ({
+    device,
+    update,
+    key: `${device.id}:${update.updateId}:${update.revision}`,
+  })))
+  const failedUpdateInventoryCount = devices.filter(device =>
+    device.os === 'Windows' && device.patchStatus.updateScanStatus === 'failed',
+  ).length
+  const partialUpdateInventoryCount = devices.filter(device =>
+    device.os === 'Windows' && device.patchStatus.updateScanStatus === 'succeeded' && Boolean(device.patchStatus.updateScanError),
+  ).length
+  const commandDeviceIds = [...new Set([
+    ...visibleDeviceIds.split('|').filter(Boolean),
+    ...availableUpdateRows.map(({ device }) => device.id),
+  ])].join('|')
 
   useEffect(() => {
-    if (mode === 'demo' || !visibleDeviceIds) {
+    if (mode === 'demo' || !commandDeviceIds) {
       setActiveCommands({})
       return
     }
 
     let cancelled = false
-    const deviceIds = visibleDeviceIds.split('|')
+    const deviceIds = commandDeviceIds.split('|')
     const refreshedCommandIds = new Set<string>()
     const refreshCommandStates = async () => {
       const results = await Promise.all(deviceIds.map(async deviceId => {
         try {
-          return { deviceId, status: await getDeviceCommandStatus(deviceId) }
-        } catch {
-          return { deviceId, status: null }
+          return { deviceId, status: await getDeviceCommandStatus(deviceId), error: null }
+        } catch (error) {
+          return { deviceId, status: null, error: error instanceof Error ? error.message : 'Unknown error' }
         }
       }))
       if (cancelled) return
 
-      const hasNewlyCompletedUpdate = results.some(({ status }) => {
-        if (!status || status.status !== 'succeeded' || (status.command !== 'check_updates' && status.command !== 'install_updates')) return false
-        if (refreshedCommandIds.has(status.command_id)) return false
+      const statusFailures = results.filter(result => result.error)
+      setCommandStatusError(statusFailures.length
+        ? `Unable to check command status for ${statusFailures.length} endpoint${statusFailures.length === 1 ? '' : 's'}. Retrying automatically. ${statusFailures[0].error}`
+        : null)
+
+      let hasNewlyCompletedUpdate = false
+      for (const { status } of results) {
+        if (!status || !isUpdateCommand(status.command) || refreshedCommandIds.has(status.command_id)) continue
+        if (!['succeeded', 'failed', 'cancelled'].includes(status.status)) continue
         refreshedCommandIds.add(status.command_id)
-        return true
-      })
+        if (status.status === 'succeeded') {
+          hasNewlyCompletedUpdate = true
+        } else {
+          setCommandError(status.result || `The ${status.command.replace('_', ' ')} command ${status.status}.`)
+        }
+      }
       if (hasNewlyCompletedUpdate) {
         void getDevices()
           .then(devicesData => {
@@ -272,9 +329,15 @@ export function PatchCompliancePage() {
       setActiveCommands(current => {
         const next = { ...current }
         for (const { deviceId, status } of results) {
-          if (!status) continue
-          const command = status.command === 'check_updates' || status.command === 'install_updates' ? status.command : null
-          const phase = status.status === 'queued' ? 'queued' : status.status === 'running' ? 'running' : null
+          if (!status) {
+            if (next[deviceId]) next[deviceId] = { ...next[deviceId], phase: 'unreachable' }
+            continue
+          }
+          const command = isUpdateCommand(status.command) ? status.command : null
+          const progress = status.result?.match(/^update_progress:([0-9a-f-]{36}):(downloading|installing)$/i)
+          const phase = progress
+            ? progress[2] as 'downloading' | 'installing'
+            : status.status === 'queued' ? 'queued' : status.status === 'running' ? 'running' : null
           if (command && phase) {
             next[deviceId] = { command, phase }
           } else {
@@ -291,27 +354,39 @@ export function PatchCompliancePage() {
       cancelled = true
       window.clearInterval(interval)
     }
-  }, [mode, visibleDeviceIds])
+  }, [mode, commandDeviceIds])
 
   const platformSummaries = (['Windows', 'Mac', 'Linux'] as const).map(os => {
     const platformDevices = devices.filter(device => device.os === os)
     const scanned = platformDevices.filter(device => !isInventoryStale(device))
-    const current = scanned.filter(device => device.patchStatus.missingTotal === 0 && !device.patchStatus.pendingReboot && !device.patchStatus.osEol).length
-    return { os, total: platformDevices.length, scanned: scanned.length, current, pending: scanned.filter(device => device.patchStatus.pendingReboot).length }
+    const current = scanned.filter(device => device.patchStatus.missingTotal === 0 && !hasPendingRestart(device) && !device.patchStatus.osEol).length
+    return {
+      os,
+      total: platformDevices.length,
+      scanned: scanned.length,
+      current,
+      pending: platformDevices.filter(hasPendingRestart).length,
+    }
   })
 
-  async function runUpdateCommand(device: Device, command: 'check_updates' | 'install_updates') {
+  async function runUpdateCommand(device: Device, command: UpdateCommand) {
     if (mode === 'demo') return
     setCommandError(null)
     setActiveCommands(current => ({ ...current, [device.id]: { command, phase: 'queued' } }))
     try {
       const queued = await queueUpdateCommand(device.id, command)
       const outcome = await waitForDeviceCommand(device.id, queued.command_id, status => {
-        const phase = status.status === 'running' ? 'running' : status.status === 'queued' ? 'queued' : null
+        const progress = status.result?.match(/^update_progress:([0-9a-f-]{36}):(downloading|installing)$/i)
+        const phase = progress
+          ? progress[2] as 'downloading' | 'installing'
+          : status.status === 'running' ? 'running' : status.status === 'queued' ? 'queued' : null
         if (phase) {
           setActiveCommands(current => ({ ...current, [device.id]: { command, phase } }))
         }
-      }, 2000, command === 'install_updates' ? 2 * 60 * 60 * 1000 : 30 * 60 * 1000)
+
+      }, 2000, command === 'install_updates' || command.startsWith('install_update:')
+        ? 2 * 60 * 60 * 1000
+        : command === 'check_updates' ? 30 * 60 * 1000 : 10 * 60 * 1000)
       if (!outcome) throw new Error('Still waiting for the endpoint agent. Check that it is online.')
       if (outcome.status === 'failed') throw new Error(outcome.result || 'The endpoint could not complete the update command.')
       if (outcome.status === 'cancelled') throw new Error(outcome.result || 'The update command was cancelled.')
@@ -328,31 +403,19 @@ export function PatchCompliancePage() {
     }
   }
 
+  function requestRestart(device: Device) {
+    if (!window.confirm(`Restart ${device.name} now? The endpoint will restart in about 60 seconds.`)) return
+    void runUpdateCommand(device, 'restart_now')
+  }
+
   return (
     <div className="space-y-5">
-      <PageHeader
-        title="OS Updates"
-        description="Update coverage, operating system lifecycle, and device update posture."
-        className="mb-5"
-      >
-        <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-brand/15 bg-brand/10 text-brand">
-            <RefreshCw size={19} strokeWidth={1.75} />
-          </div>
-          <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">OS Updates</h1>
-            <p className="mt-1 text-[13px] text-muted-foreground">
-              Update coverage, operating system lifecycle, and device update posture.
-            </p>
-          </div>
-        </div>
-      </PageHeader>
-
       {selectedUpdateDevice && (() => {
         const device = selectedUpdateDevice
         const scanStatus = device.patchStatus.updateScanStatus ?? 'unknown'
-        const scanStatusLabel = scanStatus === 'succeeded' ? 'Successful' : scanStatus === 'failed' ? 'Failed' : 'Unknown'
-        const scanStatusColor = scanStatus === 'succeeded' ? STATUS_COLORS.compliant : scanStatus === 'failed' ? STATUS_COLORS.critical : STATUS_COLORS.unknown
+        const partialResults = scanStatus === 'succeeded' && Boolean(device.patchStatus.updateScanError)
+        const scanStatusLabel = partialResults ? 'Partial results' : scanStatus === 'succeeded' ? 'Successful' : scanStatus === 'failed' ? 'Failed' : 'Unknown'
+        const scanStatusColor = partialResults ? STATUS_COLORS.warning : scanStatus === 'succeeded' ? STATUS_COLORS.compliant : scanStatus === 'failed' ? STATUS_COLORS.critical : STATUS_COLORS.unknown
         const lastScan = Date.parse(device.patchStatus.lastUpdateCheck)
         const pauseUntil = device.patchStatus.updatesPauseUntil ? Date.parse(device.patchStatus.updatesPauseUntil) : Number.NaN
         const state = getUpdateState(device)
@@ -379,6 +442,8 @@ export function PatchCompliancePage() {
               </div>
 
               <div className="max-h-[70vh] space-y-4 overflow-y-auto px-5 py-4">
+                {commandError && <p role="alert" className="rounded-md border border-status-critical/20 bg-status-critical/5 px-3 py-2 text-[12px] text-status-critical">{commandError}</p>}
+                {commandStatusError && <p role="status" className="rounded-md border border-status-warning/20 bg-status-warning/5 px-3 py-2 text-[12px] text-muted-foreground">{commandStatusError}</p>}
                 <div className="flex items-center justify-between gap-4 rounded-md border border-border bg-surface p-4 shadow-sm">
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Current update posture</p>
@@ -402,15 +467,49 @@ export function PatchCompliancePage() {
                   </div>
                   <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Restart required</p>
-                    <p className={cn('mt-2 text-[13px] font-semibold', isInventoryStale(device) ? 'text-muted-foreground' : device.patchStatus.pendingReboot ? 'text-status-warning' : 'text-status-compliant')}>
-                      {isInventoryStale(device) ? 'Unknown — scan is stale' : device.patchStatus.pendingReboot ? 'Yes' : 'No'}
+                    <p className={cn('mt-2 text-[13px] font-semibold', hasPendingRestart(device) ? 'text-status-warning' : isInventoryStale(device) ? 'text-muted-foreground' : 'text-status-compliant')}>
+                      {hasPendingRestart(device) ? 'Yes' : isInventoryStale(device) ? 'Unknown — scan is stale' : 'No'}
                     </p>
                   </div>
                   <div className="rounded-md border border-border bg-surface p-3 shadow-sm">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Update policy</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Update policy</p>
+                      {device.os === 'Windows' && (() => {
+                        const activeCommand = activeCommands[device.id]
+                        const isAutomatic = device.patchStatus.updatesAutomatic === true
+                        const isApplying = activeCommand?.command === 'automatic_on' || activeCommand?.command === 'automatic_off'
+                        return (
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-label="Get the latest updates as soon as they're available"
+                            aria-checked={isAutomatic}
+                            disabled={mode === 'demo' || Boolean(activeCommand)}
+                            onClick={event => {
+                              event.stopPropagation()
+                              void runUpdateCommand(device, isAutomatic ? 'automatic_off' : 'automatic_on')
+                            }}
+                            className={cn(
+                              'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors disabled:cursor-not-allowed disabled:opacity-60',
+                              isAutomatic ? 'bg-brand' : 'bg-border',
+                            )}
+                          >
+                            <span className={cn('inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform', isAutomatic ? 'translate-x-[18px]' : 'translate-x-1')} />
+                            <span className="sr-only">{isApplying ? 'Applying update preference' : isAutomatic ? 'Enabled' : 'Disabled'}</span>
+                          </button>
+                        )
+                      })()}
+                    </div>
+                    {(activeCommands[device.id]?.command === 'automatic_on' || activeCommands[device.id]?.command === 'automatic_off') && (
+                      <p className="mt-2 inline-flex items-center gap-1.5 text-[11px] font-medium text-brand">
+                        <RefreshCw size={12} className="animate-spin" />
+                        {activeCommands[device.id]?.phase === 'running' ? 'Applying update setting…' : 'Waiting for endpoint agent…'}
+                      </p>
+                    )}
                     <p className="mt-2 text-[13px] font-semibold text-foreground">
-                      {device.patchStatus.updatesAutomatic === undefined ? 'Not reported' : device.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
+                      {device.patchStatus.updatesAutomatic === undefined ? 'Not reported' : device.patchStatus.updatesAutomatic ? 'Latest updates enabled' : 'Latest updates disabled'}
                     </p>
+                    {device.os === 'Windows' && <p className="mt-1 text-[11px] text-muted-foreground">Get the latest updates as soon as they’re available, including non-security updates, fixes, and improvements.</p>}
                     {Number.isFinite(pauseUntil) && (
                       <p className="mt-1 text-[11px] text-muted-foreground">Paused until {format(new Date(pauseUntil), 'MMM d, yyyy')}</p>
                     )}
@@ -425,8 +524,10 @@ export function PatchCompliancePage() {
                 </div>
 
                 {device.patchStatus.updateScanError && (
-                  <div className="rounded-md border border-status-critical/20 bg-status-critical/5 p-3">
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-status-critical">Scan error</p>
+                  <div className={cn('rounded-md border p-3', partialResults ? 'border-status-warning/20 bg-status-warning/5' : 'border-status-critical/20 bg-status-critical/5')}>
+                    <p className={cn('text-[10px] font-semibold uppercase tracking-wider', partialResults ? 'text-status-warning' : 'text-status-critical')}>
+                      {partialResults ? 'Scan warning' : 'Scan error'}
+                    </p>
                     <p className="mt-1 break-words text-[12px] text-foreground">{device.patchStatus.updateScanError}</p>
                   </div>
                 )}
@@ -522,24 +623,151 @@ export function PatchCompliancePage() {
             const percentage = scanned ? Math.round((current / scanned) * 100) : null
             return (
               <div key={os} className="rounded-lg border border-border bg-gradient-to-br from-surface to-surface-elevated p-4 shadow-sm transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-brand/30 hover:shadow-md">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    <OSIcon os={os} />
-                    <span className="text-[13px] font-semibold text-foreground">{os}</span>
+                <div className="flex items-center gap-4">
+                  <div
+                    className="flex h-[72px] w-[72px] shrink-0 items-center justify-center rounded-full p-[5px]"
+                    role="progressbar"
+                    aria-label={`${os} update readiness`}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    aria-valuenow={percentage ?? undefined}
+                    style={{
+                      background: percentage === null
+                        ? 'var(--border)'
+                        : `conic-gradient(var(--brand) ${percentage}%, var(--border) ${percentage}% 100%)`,
+                    }}
+                  >
+                    <div className="flex h-full w-full items-center justify-center rounded-full bg-surface text-[13px] font-semibold text-foreground">
+                      {percentage === null ? '—' : `${percentage}%`}
+                    </div>
                   </div>
-                  <span className="font-mono text-[13px] font-semibold text-foreground">{percentage === null ? '—' : `${percentage}%`}</span>
-                </div>
-                <div className="mt-4 h-2 overflow-hidden rounded-full bg-border/70">
-                  <div className="h-full rounded-full bg-brand transition-all" style={{ width: `${percentage ?? 0}%` }} />
-                </div>
-                <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{percentage === null ? `No scan · ${total} devices` : `${current} of ${scanned} scanned ready`}</span>
-                  <span>{pending} restart{pending === 1 ? '' : 's'} required</span>
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center gap-2">
+                      <OSIcon os={os} />
+                      <span className="text-[13px] font-semibold text-foreground">{os}</span>
+                    </div>
+                    <div className="space-y-1 text-[11px] text-muted-foreground">
+                      <p>{percentage === null ? `No scan · ${total} devices` : `${current} of ${scanned} scanned ready`}</p>
+                      <p>{pending} restart{pending === 1 ? '' : 's'} required</p>
+                    </div>
+                  </div>
                 </div>
               </div>
             )
           })}
         </div>
+      </SectionCard>
+
+      <SectionCard
+        title="Available Windows updates"
+        description="Windows Update inventory refreshes every five minutes. Live download and install states are reported for Fleet actions; this agent cannot report live progress for downloads started elsewhere."
+        className="order-3 rounded-lg transition-shadow duration-200 hover:shadow-md"
+      >
+        {commandError && <p role="alert" className="mb-3 rounded-md border border-status-critical/20 bg-status-critical/5 px-3 py-2 text-[12px] text-status-critical">{commandError}</p>}
+        {commandStatusError && <p role="status" className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/5 px-3 py-2 text-[12px] text-muted-foreground">{commandStatusError}</p>}
+        {failedUpdateInventoryCount > 0 && (
+          <p role="alert" className="mb-3 rounded-md border border-status-critical/20 bg-status-critical/5 px-3 py-2 text-[12px] text-muted-foreground">
+            {failedUpdateInventoryCount} Windows endpoint{failedUpdateInventoryCount === 1 ? '' : 's'} reported an update scan failure; displayed inventory may be old. Open endpoint details for the scan error.
+          </p>
+        )}
+        {partialUpdateInventoryCount > 0 && (
+          <p role="status" className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/5 px-3 py-2 text-[12px] text-muted-foreground">
+            {partialUpdateInventoryCount} Windows endpoint{partialUpdateInventoryCount === 1 ? '' : 's'} returned partial update results. Review the endpoint scan warning.
+          </p>
+        )}
+        {availableUpdateRows.length === 0 ? (
+          <div className="rounded-md border border-border bg-surface px-4 py-8 text-center text-[12px] text-muted-foreground">
+            {devices.some(device => device.os === 'Windows' && device.patchStatus.updateScanStatus === 'failed')
+              ? 'Windows Update could not return an inventory. Open the endpoint details to see the scan error and retry.'
+              : devices.some(device => device.os === 'Windows' && device.patchStatus.updateScanStatus === 'succeeded' && Boolean(device.patchStatus.updateScanError))
+              ? 'Windows Update returned partial results. Review the endpoint scan warning before treating this as an empty inventory.'
+              : devices.some(device => device.os === 'Windows' && device.patchStatus.availableUpdates !== undefined)
+              ? 'Windows Update reports no applicable updates.'
+              : 'Per-update inventory has not been reported by the Windows endpoints yet.'}
+          </div>
+        ) : (
+          <div className="overflow-x-auto rounded-md border border-border bg-surface shadow-sm">
+            <table className="w-full min-w-[760px] text-left text-[12px]">
+              <thead className="border-b border-border bg-surface-elevated text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2.5">Endpoint</th>
+                  <th className="px-3 py-2.5">Windows update</th>
+                  <th className="px-3 py-2.5">Last observed status</th>
+                  <th className="px-3 py-2.5 text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {availableUpdateRows.map(({ device, update, key }) => {
+                  const active = activeCommands[device.id]
+                  const command = `install_update:${update.updateId}`
+                  const isActive = active?.command === command || active?.command === 'install_updates'
+                  const pendingRestart = update.status === 'pending_restart' || update.rebootRequired
+                  const liveStatus = isActive
+                    ? active.phase === 'unreachable' ? 'Status unavailable'
+                    : active.phase === 'downloading' ? 'Downloading'
+                    : active.phase === 'installing' ? 'Installing'
+                    : active.phase === 'queued' ? 'Waiting for endpoint'
+                    : 'Preparing'
+                    : pendingRestart ? 'Pending restart'
+                    : update.downloaded ? 'Install' : 'Available'
+                  const statusColor = liveStatus === 'Pending restart'
+                    ? STATUS_COLORS.warning
+                    : liveStatus === 'Install' ? 'var(--brand)' : liveStatus === 'Available' ? 'var(--muted-foreground)' : STATUS_COLORS.compliant
+                  const updateSize = update.sizeBytes > 0 ? `${(update.sizeBytes / 1024 / 1024).toFixed(1)} MB` : null
+                  return (
+                    <tr key={key}>
+                      <td className="px-3 py-3 align-top">
+                        <p className="font-medium text-foreground">{device.name}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          Last scan {getInventoryAge(device.patchStatus.lastUpdateCheck)}
+                        </p>
+                      </td>
+                      <td className="max-w-[420px] px-3 py-3 align-top">
+                        <p className="font-medium text-foreground">{update.title}</p>
+                        <p className="mt-0.5 text-[10px] text-muted-foreground">
+                          {[update.severity, ...update.categories, updateSize].filter(Boolean).join(' · ') || 'Windows Update'}
+                        </p>
+                      </td>
+                      <td className="px-3 py-3 align-top">
+                        <span className="inline-flex items-center gap-1.5 font-medium" style={{ color: statusColor }}>
+                          {isActive && active.phase !== 'unreachable' && <Loader2 size={12} className="animate-spin" />}
+                          {liveStatus}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3 text-right align-top">
+                        {isActive ? (
+                          <span className="text-[11px] text-muted-foreground">
+                            {active.phase === 'unreachable' ? 'Cannot verify command status' : liveStatus === 'Downloading' ? 'Downloading…' : liveStatus === 'Installing' ? 'Installing…' : 'Waiting…'}
+                          </span>
+                        ) : pendingRestart ? (
+                          <button
+                            type="button"
+                            disabled={mode === 'demo' || Boolean(active)}
+                            onClick={() => requestRestart(device)}
+                            className="text-[11px] font-medium text-status-warning underline underline-offset-2 disabled:opacity-50"
+                          >
+                            Restart now
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            disabled={mode === 'demo' || Boolean(active) || !isUpdateCommand(command)}
+                            onClick={() => {
+                              if (isUpdateCommand(command)) void runUpdateCommand(device, command)
+                            }}
+                            className="text-[11px] font-medium text-brand underline underline-offset-2 disabled:opacity-50"
+                          >
+                            {update.downloaded ? 'Install' : 'Download & install'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </SectionCard>
 
       {/* Remediation signals and endpoint priority list */}
@@ -640,6 +868,7 @@ export function PatchCompliancePage() {
       {/* Device patch table */}
       <SectionCard title="Device update status" description="All managed devices sorted by update exposure." className="order-3 rounded-lg transition-shadow duration-200 hover:shadow-md">
         {commandError && <p role="alert" className="mb-3 rounded-md border border-status-critical/20 bg-status-critical/5 px-3 py-2 text-[12px] text-status-critical">{commandError}</p>}
+        {commandStatusError && <p role="status" className="mb-3 rounded-md border border-status-warning/20 bg-status-warning/5 px-3 py-2 text-[12px] text-muted-foreground">{commandStatusError}</p>}
         <div className="mb-4 flex flex-wrap items-center gap-2">
           <div className="relative min-w-52 flex-1">
             <Search size={13} strokeWidth={1.5} className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -710,10 +939,12 @@ export function PatchCompliancePage() {
                     {d.osVersion || 'Not reported'}
                   </span>
                   <span className="col-span-2 text-center text-[13px] text-foreground">
-                    {d.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
+                    {d.patchStatus.updatesAutomatic === undefined ? 'Unknown' : d.patchStatus.updatesAutomatic ? 'Automatic' : 'Manual'}
                   </span>
-                  <span className={cn('col-span-2 text-center text-[13px] font-medium', isInventoryStale(d) ? 'text-muted-foreground' : d.patchStatus.pendingReboot ? 'text-status-warning' : 'text-status-compliant')}>
-                    {isInventoryStale(d) ? 'Unknown' : d.patchStatus.pendingReboot ? 'Required' : 'No'}
+                  <span className={cn('col-span-2 text-center text-[13px] font-medium', hasPendingRestart(d) ? 'text-status-warning' : isInventoryStale(d) ? 'text-muted-foreground' : 'text-status-compliant')}>
+                    {hasPendingRestart(d)
+                      ? 'Required'
+                      : isInventoryStale(d) ? 'Unknown' : 'No'}
                   </span>
                   <span className="col-span-2 flex flex-col items-start gap-1">
                     {(() => {
@@ -729,16 +960,21 @@ export function PatchCompliancePage() {
                         </span>
                       )
                     })()}
-                    {d.os === 'Windows' && (isInventoryStale(d) || d.patchStatus.missingTotal > 0) && (() => {
+                    {d.os === 'Windows' && (hasPendingRestart(d) || isInventoryStale(d) || d.patchStatus.missingTotal > 0) && (() => {
                       const activeCommand = activeCommands[d.id]
-                      const command = isInventoryStale(d) ? 'check_updates' : 'install_updates'
+                      const restartRequired = hasPendingRestart(d)
+                      const command = restartRequired ? 'restart_now' : isInventoryStale(d) ? 'check_updates' : 'install_updates'
                       const label = activeCommand
                         ? activeCommand.command === 'check_updates'
                           ? activeCommand.phase === 'running' ? 'Checking for updates…' : 'Waiting for agent…'
-                          : activeCommand.phase === 'running' ? 'Installing…' : 'Waiting for agent…'
-                        : command === 'check_updates' ? 'Check for updates' : 'Download and Install'
+                          : activeCommand.command === 'install_updates'
+                          ? activeCommand.phase === 'running' ? 'Installing…' : 'Waiting for agent…'
+                          : activeCommand.command === 'restart_now'
+                          ? activeCommand.phase === 'running' ? 'Restarting…' : 'Waiting for agent…'
+                          : activeCommand.phase === 'running' ? 'Applying update setting…' : 'Waiting for agent…'
+                        : command === 'restart_now' ? 'Restart now' : command === 'check_updates' ? 'Check for updates' : 'Download and Install'
                       return (
-                        <button type="button" disabled={Boolean(activeCommand)} onClick={event => { event.stopPropagation(); void runUpdateCommand(d, command) }} className="text-[11px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
+                        <button type="button" disabled={Boolean(activeCommand)} onClick={event => { event.stopPropagation(); if (command === 'restart_now') requestRestart(d); else void runUpdateCommand(d, command) }} className="text-[11px] font-medium text-brand underline underline-offset-2 disabled:opacity-50">
                           {label}
                         </button>
                       )

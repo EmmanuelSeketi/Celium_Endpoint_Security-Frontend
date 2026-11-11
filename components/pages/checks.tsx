@@ -168,6 +168,7 @@ export function ChecksPage() {
         <PageHeader
           title="Compliance Checks"
           description={`${checks.length} checks defined · ${totalFailing} total failing instances.`}
+          className="mb-0"
         />
 
         {/* Summary row */}

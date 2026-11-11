@@ -742,6 +742,17 @@ export function ReportsPage() {
           return
         }
 
+        if (!Array.isArray(deviceResult.value) || !Array.isArray(checkResult.value)) {
+          const invalidSources = [
+            !Array.isArray(deviceResult.value) ? 'device list' : '',
+            !Array.isArray(checkResult.value) ? 'security check list' : '',
+          ].filter(Boolean)
+          setSnapshot(null)
+          setLoadError(`The backend returned invalid ${invalidSources.join(' and ')} data. Please check the backend response and try again.`)
+          return
+        }
+
+        const detectionsAvailable = detectionResult.status === 'fulfilled' && Array.isArray(detectionResult.value)
         setSnapshot({
           devices: deviceResult.value.map(mapManagedDevice),
           checks: checkResult.value.filter(check => check.is_active).map(check => ({
@@ -749,7 +760,7 @@ export function ReportsPage() {
             category: check.category === 'patch' ? 'os_updates' : check.category === 'malware' ? 'malware_protection' : check.category,
             failingDeviceCount: check.failing_device_count ?? 0,
           })),
-          ...(detectionResult.status === 'fulfilled'
+          ...(detectionsAvailable
             ? { detections: detectionResult.value.map(detection => ({
               device_name: detection.device_name,
               threat_name: detection.threat_name,
@@ -760,9 +771,9 @@ export function ReportsPage() {
             : {}),
           ...(adResult.status === 'fulfilled' ? { adStatus: adResult.value } : {}),
         })
-        if (detectionResult.status === 'rejected' || adResult.status === 'rejected') {
+        if (!detectionsAvailable || adResult.status === 'rejected') {
           const unavailable = [
-            detectionResult.status === 'rejected' ? 'malware detection history' : '',
+            !detectionsAvailable ? 'malware detection history' : '',
             adResult.status === 'rejected' ? 'Active Directory details' : '',
           ].filter(Boolean)
           setLoadError(`Some optional report sources are unavailable: ${unavailable.join(' and ')}. Those sections will be marked accordingly.`)
@@ -810,7 +821,7 @@ export function ReportsPage() {
 
         {metrics && snapshot && (
           <>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2 xl:grid-cols-4">
               <KpiCard label="Managed endpoints" value={metrics.endpoints} accentColor="#008080" />
               <KpiCard label="Average compliance" value={metrics.scoreCoverage ? `${metrics.averageScore}%` : '—'} description={`${metrics.scoreCoverage} of ${metrics.endpoints} scores reported`} accentColor="#5B7FFF" />
               <KpiCard label="Controls with failures" value={metrics.failingControls} accentColor={metrics.failingControls ? '#F79009' : '#12B76A'} />

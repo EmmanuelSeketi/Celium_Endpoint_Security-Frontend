@@ -1,4 +1,4 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:3001/api/v1'
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:3002/api/v1'
 
 type ApiSuccess<T> = {
   success: boolean
@@ -69,6 +69,18 @@ export type MalwareStatusApi = {
   quarantine_count: number
 }
 
+export type AvailableWindowsUpdate = {
+  update_id: string
+  revision: number
+  title: string
+  status: 'available' | 'install' | 'pending_restart'
+  downloaded: boolean
+  reboot_required: boolean
+  severity?: string
+  categories: string[]
+  size_bytes: number
+}
+
 export type ManagedDevice = {
   id: string
   device_id: string
@@ -86,6 +98,7 @@ export type ManagedDevice = {
   passed_checks: number
   failed_checks: number
   error_checks?: number
+  available_updates?: AvailableWindowsUpdate[]
   update_history?: Record<string, unknown>[]
   updates_automatic: boolean
   updates_pause_until?: string
@@ -568,6 +581,13 @@ export type AgentTelemetryRequest = {
     os_eol: boolean
     eol_date?: string
   }
+  update_status: {
+    available_updates: AvailableWindowsUpdate[]
+    history: Record<string, unknown>[]
+    automatic: boolean
+    pause_until?: string
+    command_applied_at?: string
+  }
   detections: Array<{
     threat_name: string
     file_path: string
@@ -644,4 +664,3 @@ export async function sendTelemetry(payload: AgentTelemetryRequest, agentToken: 
     body: JSON.stringify(payload),
   })
 }
-

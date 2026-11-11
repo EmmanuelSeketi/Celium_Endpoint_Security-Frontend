@@ -225,10 +225,11 @@ export function OverviewPage() {
   const heatmapData = riskPlatforms.map(platform => categories.map(category => Math.round(categoryFailures[category] * (platform.count / platformTotal))))
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         title="Dashboard"
         description="Fleet compliance summary."
+        className="mb-0"
       />
 
       {/* KPI Row */}

@@ -187,6 +187,7 @@ export function ActiveDirectoryPage() {
       <PageHeader
         title="Active Directory"
         description="Domain controller health, authentication activity, and privileged access monitoring."
+        className="mb-0"
       />
 
       {/* KPI row */}

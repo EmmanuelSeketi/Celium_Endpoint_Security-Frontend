@@ -6,6 +6,8 @@ COPY package.json pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --ignore-scripts
 
 COPY . .
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:3002/api/v1
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 RUN pnpm build
 
 FROM node:20-alpine AS runner
@@ -26,6 +28,6 @@ USER nextjs
 EXPOSE 3000
 
 ENV PORT=3000
-ENV NEXT_PUBLIC_API_BASE_URL="http://localhost:3001/api/v1"
+ENV NEXT_PUBLIC_API_BASE_URL="http://localhost:3002/api/v1"
 
 CMD ["node", "server.js"]

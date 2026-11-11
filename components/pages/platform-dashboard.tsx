@@ -15,7 +15,7 @@ export function PlatformDashboardPage() {
   useEffect(() => { if (mode === 'demo') { setStats(demoStats); return }; getPlatformStats().then(setStats).catch(() => setStats(demoStats)) }, [mode])
   const health = stats.total_devices ? Math.round(stats.health_summary.compliant_devices / stats.total_devices * 100) : 0
   return <div className="space-y-4">
-    <PageHeader title="Platform dashboard" description="Cross-tenant health and operational posture." />
+    <PageHeader title="Platform dashboard" description="Cross-tenant health and operational posture." className="mb-0" />
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
       <KpiCard label="Organizations" value={stats.total_orgs} description={`${stats.active_orgs} active, ${stats.inactive_orgs} inactive`} accentColor="#5B7FFF" />
       <KpiCard label="Managed devices" value={stats.total_devices.toLocaleString()} description={`${stats.active_devices.toLocaleString()} reporting now`} accentColor="#008080" />

@@ -32,9 +32,22 @@ export interface PatchStatus {
   updateScanError?: string
   osEol: boolean
   eolDate?: string
+  availableUpdates?: AvailableUpdate[]
   updateHistory?: Record<string, unknown>[]
   updatesAutomatic?: boolean
   updatesPauseUntil?: string
+}
+
+export interface AvailableUpdate {
+  updateId: string
+  revision: number
+  title: string
+  status: 'available' | 'install' | 'pending_restart'
+  downloaded: boolean
+  rebootRequired: boolean
+  severity?: string
+  categories: string[]
+  sizeBytes: number
 }
 
 export interface Device {
